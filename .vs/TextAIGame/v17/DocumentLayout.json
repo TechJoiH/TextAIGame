@@ -1,0 +1,51 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "D:\\unity works\\TextAIGame\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{254CB3BA-7C9E-868C-2120-0074F72390D6}|Assembly-CSharp.csproj|d:\\unity works\\textaigame\\assets\\scripts\\json\\src\\litjson\\jsonwriter.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{254CB3BA-7C9E-868C-2120-0074F72390D6}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\json\\src\\litjson\\jsonwriter.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 1,
+          "Children": [
+            {
+              "$type": "Bookmark",
+              "Name": "ST:128:0:{1fc202d4-d401-403c-9834-5b218574bb67}"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "JsonWriter.cs",
+              "DocumentMoniker": "D:\\unity works\\TextAIGame\\Assets\\Scripts\\Json\\src\\LitJson\\JsonWriter.cs",
+              "RelativeDocumentMoniker": "Assets\\Scripts\\Json\\src\\LitJson\\JsonWriter.cs",
+              "ToolTip": "D:\\unity works\\TextAIGame\\Assets\\Scripts\\Json\\src\\LitJson\\JsonWriter.cs",
+              "RelativeToolTip": "Assets\\Scripts\\Json\\src\\LitJson\\JsonWriter.cs",
+              "ViewState": "AgIAAGUBAAAAAAAAAADgv4EBAAAIAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-01-11T04:24:22.548Z",
+              "EditorCaption": ""
+            }
+          ]
+        },
+        {
+          "DockedWidth": 138,
+          "SelectedChildIndex": -1,
+          "Children": [
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{40ea2e6b-2121-4bb8-a43e-c83c04b51041}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
