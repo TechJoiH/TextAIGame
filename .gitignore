@@ -25,3 +25,5 @@
 # 系统生成文件
 .DS_Store
 Thumbs.db
+.vs/
+/[Uu]ser[Ss]ettings/
