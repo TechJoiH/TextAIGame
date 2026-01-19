@@ -2,8 +2,11 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public class EventCenter : Singleton<EventCenter>
+public class EventCenter 
 {
+    private static EventCenter eventCenter=new EventCenter();
+    public static EventCenter Instance=> eventCenter;
+    private EventCenter() { }
     // 字典存储所有的事件监听器
     // Key: 事件名字 (如 "MonsterDie")
     // Value: 对应的一堆函数 (Delegate)
