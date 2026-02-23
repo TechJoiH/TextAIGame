@@ -2,16 +2,27 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using StateData.Role;
+using Logic.Memory;
 
 /// <summary>
-/// 存档数据摘要（用于在列表中显示）
+/// 存档槽位摘要（用于列表显示）
 /// </summary>
 [Serializable]
 public class SaveSlotHeader
 {
-    public string saveId;       // 唯一ID (如 timestamp)
-    public string timeDisplay;  // 显示时间 (如 "12/31 12:30")
-    public string summary;      // 剧情摘要 (用户输入的最后一句)
+    public string saveId;       // 唯一ID
+    public string timeDisplay;  // 显示时间
+    public string summary;      // 内容摘要
+}
+
+/// <summary>
+/// 完整存档数据
+/// </summary>
+[Serializable]
+public class FullSaveData
+{
+    public RoleState roleState;
+    public MemorySnapshot memorySnapshot;
 }
 
 /// <summary>
@@ -24,11 +35,13 @@ public class SaveManifest
 }
 
 /// <summary>
-/// P0 & P3: 存档与回档管理器（基于 JsonMgr）
+/// 存档管理器（支持角色状态+记忆快照）
 /// </summary>
 public class GameSaveMgr : MonoSingleton<GameSaveMgr>
 {
     private const string MANIFEST_NAME = "save_manifest";
+    private const int MAX_SAVE_SLOTS = 20;
+    
     private SaveManifest manifest;
 
     protected override void Awake()
@@ -50,7 +63,7 @@ public class GameSaveMgr : MonoSingleton<GameSaveMgr>
     }
 
     /// <summary>
-    /// 创建新的存档节点（建议在回合结算完成后调用）
+    /// 创建新的存档节点（包含记忆快照）
     /// </summary>
     public void CreateCheckpoint(RoleState currentState, string userLastInput)
     {
@@ -58,12 +71,18 @@ public class GameSaveMgr : MonoSingleton<GameSaveMgr>
 
         string id = DateTime.Now.ToString("yyyyMMdd_HHmmss");
 
-        // 1) 保存实际数据
-        JsonMgr.Instance.SaveData($"save_{id}", currentState, JsonType.LitJson);
+        // 1) 构建完整存档数据
+        var fullSave = new FullSaveData
+        {
+            roleState = currentState,
+            memorySnapshot = MemoryManager.Instance.GetSnapshot()
+        };
+        
+        JsonMgr.Instance.SaveData($"save_{id}", fullSave, JsonType.LitJson);
 
         // 2) 更新清单
         string summary = userLastInput ?? "";
-        summary = summary.Length > 10 ? summary.Substring(0, 10) + "..." : summary;
+        summary = summary.Length > 15 ? summary.Substring(0, 15) + "..." : summary;
 
         SaveSlotHeader header = new SaveSlotHeader
         {
@@ -73,22 +92,38 @@ public class GameSaveMgr : MonoSingleton<GameSaveMgr>
         };
 
         manifest.slots.Add(header);
+        
+        // 限制存档数量
+        while (manifest.slots.Count > MAX_SAVE_SLOTS)
+        {
+            manifest.slots.RemoveAt(0);
+        }
+        
         JsonMgr.Instance.SaveData(MANIFEST_NAME, manifest, JsonType.LitJson);
 
         Debug.Log($"[GameSaveMgr] 存档点已创建: {id}");
     }
 
     /// <summary>
-    /// 加载指定存档
+    /// 加载指定存档（返回完整数据）
     /// </summary>
-    public RoleState LoadCheckpoint(string saveId)
+    public FullSaveData LoadCheckpointFull(string saveId)
     {
         if (string.IsNullOrEmpty(saveId)) return null;
-        return JsonMgr.Instance.LoadData<RoleState>($"save_{saveId}", JsonType.LitJson);
+        return JsonMgr.Instance.LoadData<FullSaveData>($"save_{saveId}", JsonType.LitJson);
     }
 
     /// <summary>
-    /// 获取所有存档点（最新的在最上面）
+    /// 加载指定存档（仅角色状态，兼容旧接口）
+    /// </summary>
+    public RoleState LoadCheckpoint(string saveId)
+    {
+        var fullData = LoadCheckpointFull(saveId);
+        return fullData?.roleState;
+    }
+
+    /// <summary>
+    /// 获取所有存档点（最新的在前）
     /// </summary>
     public List<SaveSlotHeader> GetAllCheckpoints()
     {
@@ -98,5 +133,19 @@ public class GameSaveMgr : MonoSingleton<GameSaveMgr>
         List<SaveSlotHeader> reversed = new List<SaveSlotHeader>(manifest.slots);
         reversed.Reverse();
         return reversed;
+    }
+
+    /// <summary>
+    /// 删除指定存档
+    /// </summary>
+    public void DeleteCheckpoint(string saveId)
+    {
+        if (string.IsNullOrEmpty(saveId)) return;
+        
+        manifest.slots.RemoveAll(s => s.saveId == saveId);
+        JsonMgr.Instance.SaveData(MANIFEST_NAME, manifest, JsonType.LitJson);
+        
+        // 注意：实际文件删除需要额外实现
+        Debug.Log($"[GameSaveMgr] 存档已删除: {saveId}");
     }
 }

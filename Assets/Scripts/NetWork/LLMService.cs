@@ -3,25 +3,19 @@ using System.Collections;
 using System.Text;
 using UnityEngine;
 using UnityEngine.Networking;
-using LitJson; 
+using LitJson;
 
 /// <summary>
 /// LLM 服务（NVIDIA Integrate ChatCompletions）
-/// MVP：UnityWebRequest + 轮询 downloadHandler.text 实现简易 SSE 流式解析。
+/// 支持流式输出和多轮对话记忆
 /// </summary>
 public class LLMService : MonoSingleton<LLMService>
 {
-    // 【修改点】NVIDIA API 配置
-    // 注意：这是 NVIDIA 的通用入口，具体模型由 payload 里的 model 字段决定
     private const string API_URL = "https://integrate.api.nvidia.com/v1/chat/completions";
-
-    // 【重要】请在这里填入你从 NVIDIA 官网申请的 "nvapi-" 开头的 Key
-    // 例：Bearer nvapi-xxxxxxxx...
     private const string API_KEY = "Bearer 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";
-
-    // 【修改点】模型名称，请确保和 NVIDIA 页面上显示的完全一致
     private const string MODEL_NAME = "meta/llama-3.1-70b-instruct";
 
+    [Serializable]
     public class RequestPayload
     {
         public string model;
@@ -31,28 +25,54 @@ public class LLMService : MonoSingleton<LLMService>
         public int max_tokens = 1024;
     }
 
+    [Serializable]
     public class Message
     {
         public string role;
         public string content;
     }
 
+    private int consecutiveFailures = 0;
+    private const int MAX_FAILURES = 3;
+
     /// <summary>
-    /// 发送流式请求 (NVIDIA API)
+    /// 发起流式请求（简化版，兼容旧接口）
     /// </summary>
     public void PostStream(string systemPrompt, string userPrompt, Action<string> onTokenReceived, Action onComplete)
     {
-        StartCoroutine(IRequestRoutine(systemPrompt, userPrompt, onTokenReceived, onComplete));
+        var messages = new[]
+        {
+            new Message { role = "system", content = systemPrompt },
+            new Message { role = "user", content = userPrompt }
+        };
+        
+        StartCoroutine(RequestRoutine(messages, onTokenReceived, onComplete));
     }
 
-    private IEnumerator IRequestRoutine(string system, string user, Action<string> onToken, Action onComplete)
+    /// <summary>
+    /// 发起流式请求（支持完整消息数组，用于多轮对话）
+    /// </summary>
+    public void PostStreamWithMessages(Message[] messages, Action<string> onTokenReceived, Action onComplete)
+    {
+        StartCoroutine(RequestRoutine(messages, onTokenReceived, onComplete));
+    }
+
+    /// <summary>
+    /// 发起非流式请求（用于摘要生成等场景）
+    /// </summary>
+    public void PostNonStream(string systemPrompt, string userPrompt, Action<string> onComplete)
     {
         var messages = new[]
         {
-            new Message { role = "system", content = system },
-            new Message { role = "user", content = user }
+            new Message { role = "system", content = systemPrompt },
+            new Message { role = "user", content = userPrompt }
         };
+        
+        StartCoroutine(NonStreamRequestRoutine(messages, onComplete));
+    }
 
+    private IEnumerator RequestRoutine(Message[] messages, Action<string> onToken, Action onComplete)
+    {
         var payload = new RequestPayload
         {
             model = MODEL_NAME,
@@ -63,65 +83,124 @@ public class LLMService : MonoSingleton<LLMService>
         string json = JsonMapper.ToJson(payload);
         byte[] bodyRaw = Encoding.UTF8.GetBytes(json);
 
-        var request = new UnityWebRequest(API_URL, UnityWebRequest.kHttpVerbPOST);
-        request.uploadHandler = new UploadHandlerRaw(bodyRaw);
-        request.downloadHandler = new DownloadHandlerBuffer();
-
-        request.SetRequestHeader("Content-Type", "application/json");
-        request.SetRequestHeader("Authorization", API_KEY);
-        request.SetRequestHeader("Accept", "text/event-stream");
-
-        var operation = request.SendWebRequest();
-
-        int lastDataIndex = 0;
-
-        while (!operation.isDone)
+        using (var request = new UnityWebRequest(API_URL, UnityWebRequest.kHttpVerbPOST))
         {
-            yield return null;
+            request.uploadHandler = new UploadHandlerRaw(bodyRaw);
+            request.downloadHandler = new DownloadHandlerBuffer();
 
-            string currentText = request.downloadHandler.text;
-            if (string.IsNullOrEmpty(currentText) || currentText.Length <= lastDataIndex)
-                continue;
+            request.SetRequestHeader("Content-Type", "application/json");
+            request.SetRequestHeader("Authorization", API_KEY);
+            request.SetRequestHeader("Accept", "text/event-stream");
 
-            string newData = currentText.Substring(lastDataIndex);
-            lastDataIndex = currentText.Length;
+            var operation = request.SendWebRequest();
+            int lastDataIndex = 0;
 
-            ProcessStreamData(newData, onToken);
-        }
+            while (!operation.isDone)
+            {
+                yield return null;
 
-        // 结束后再扫一次尾巴（防止最后一包没被 while 捕获）
-        string finalText = request.downloadHandler.text;
-        if (!string.IsNullOrEmpty(finalText) && finalText.Length > lastDataIndex)
-        {
-            string newData = finalText.Substring(lastDataIndex);
-            ProcessStreamData(newData, onToken);
-        }
+                string currentText = request.downloadHandler.text;
+                if (string.IsNullOrEmpty(currentText) || currentText.Length <= lastDataIndex)
+                    continue;
 
-        if (request.result != UnityWebRequest.Result.Success)
-        {
-            Debug.LogError($"[NVIDIA API Error]: {request.error}\nResponse: {request.downloadHandler.text}");
-            onToken?.Invoke($"[连接失败: {request.error}]");
+                string newData = currentText.Substring(lastDataIndex);
+                lastDataIndex = currentText.Length;
+
+                ProcessStreamData(newData, onToken);
+            }
+
+            // 处理剩余数据
+            string finalText = request.downloadHandler.text;
+            if (!string.IsNullOrEmpty(finalText) && finalText.Length > lastDataIndex)
+            {
+                string newData = finalText.Substring(lastDataIndex);
+                ProcessStreamData(newData, onToken);
+            }
+
+            // 错误处理与降级
+            if (request.result != UnityWebRequest.Result.Success)
+            {
+                consecutiveFailures++;
+                Debug.LogError($"[LLM API Error]: {request.error}");
+                
+                if (consecutiveFailures >= MAX_FAILURES)
+                {
+                    onToken?.Invoke(GetFallbackResponse());
+                    consecutiveFailures = 0;
+                }
+                else
+                {
+                    onToken?.Invoke($"[连接失败，正在重试... ({consecutiveFailures}/{MAX_FAILURES})]");
+                }
+            }
+            else
+            {
+                consecutiveFailures = 0;
+            }
         }
 
         onComplete?.Invoke();
-        request.Dispose();
     }
 
-    // 解析 SSE 格式数据 (data: {...})
+    private IEnumerator NonStreamRequestRoutine(Message[] messages, Action<string> onComplete)
+    {
+        var payload = new RequestPayload
+        {
+            model = MODEL_NAME,
+            messages = messages,
+            stream = false,
+            max_tokens = 256  // 摘要用较短的Token限制
+        };
+
+        string json = JsonMapper.ToJson(payload);
+        byte[] bodyRaw = Encoding.UTF8.GetBytes(json);
+
+        using (var request = new UnityWebRequest(API_URL, UnityWebRequest.kHttpVerbPOST))
+        {
+            request.uploadHandler = new UploadHandlerRaw(bodyRaw);
+            request.downloadHandler = new DownloadHandlerBuffer();
+
+            request.SetRequestHeader("Content-Type", "application/json");
+            request.SetRequestHeader("Authorization", API_KEY);
+
+            yield return request.SendWebRequest();
+
+            if (request.result == UnityWebRequest.Result.Success)
+            {
+                try
+                {
+                    JsonData data = JsonMapper.ToObject(request.downloadHandler.text);
+                    if (data != null && data.Keys.Contains("choices") && data["choices"].Count > 0)
+                    {
+                        string content = (string)data["choices"][0]["message"]["content"];
+                        onComplete?.Invoke(content);
+                        yield break;
+                    }
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError($"[LLM] 解析响应失败: {e.Message}");
+                }
+            }
+            else
+            {
+                Debug.LogError($"[LLM API Error]: {request.error}");
+            }
+
+            onComplete?.Invoke(null);
+        }
+    }
+
     private void ProcessStreamData(string dataChunk, Action<string> onToken)
     {
         string[] lines = dataChunk.Split('\n');
         foreach (var line in lines)
         {
             string cleanLine = line.Trim();
-            if (string.IsNullOrEmpty(cleanLine))
-                continue;
-
-            if (!cleanLine.StartsWith("data:", StringComparison.Ordinal))
+            if (string.IsNullOrEmpty(cleanLine) || !cleanLine.StartsWith("data:", StringComparison.Ordinal))
                 continue;
 
             string jsonStr = cleanLine.Substring("data:".Length).Trim();
-
             if (jsonStr == "[DONE]")
                 return;
 
@@ -130,7 +209,6 @@ public class LLMService : MonoSingleton<LLMService>
                 JsonData data = JsonMapper.ToObject(jsonStr);
                 if (data == null) continue;
 
-                // 兼容 OpenAI/NVIDIA SSE：choices[0].delta.content
                 if (data.IsObject && data.Keys.Contains("choices") && data["choices"] != null && data["choices"].Count > 0)
                 {
                     JsonData choice = data["choices"][0];
@@ -148,8 +226,19 @@ public class LLMService : MonoSingleton<LLMService>
             }
             catch
             {
-                // 流式传输可能截断 JSON：忽略该帧解析错误
+                // 格式错误或截断JSON，等待下一帧继续处理
             }
         }
+    }
+
+    private string GetFallbackResponse()
+    {
+        string[] fallbacks = new[]
+        {
+            "四周雾气弥漫，你暂时无法看清前路……（网络连接不稳定）",
+            "一阵眩晕袭来，意识暂时陷入混沌……（正在重新连接）",
+            "山风呼啸，似乎有什么阻断了你与天地的联系……（请稍后重试）"
+        };
+        return fallbacks[UnityEngine.Random.Range(0, fallbacks.Length)];
     }
 }

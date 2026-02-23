@@ -26,20 +26,28 @@ public class BeginPanel : BasePanel
 
     private void OnClickBegin()
     {
+        // 播放打开面板的特殊音效
+        if (AudioMgr.Instance != null)
+            AudioMgr.Instance.PlayPanelOpenSfx();
+
         HideMe();
 
         if (GameLoop.Instance != null)
             GameLoop.Instance.StartNewGame();
         else
-            Debug.LogError("[BeginPanel] 未找到 GameLoop.Instance，无法开始游戏。");
+            Debug.LogError("[BeginPanel] 未找到 GameLoop.Instance，无法开始游戏！");
     }
 
     private void OnClickSet()
     {
+        // 播放打开面板的特殊音效
+        if (AudioMgr.Instance != null)
+            AudioMgr.Instance.PlayPanelOpenSfx();
+
         var panel = UIMgr.Instance.ShowPanel<SetPanel>();
         if (panel == null)
         {
-            Debug.LogWarning("[BeginPanel] 打开 SetPanel 失败：请确认预制体路径为 Resources/UI/SetPanel，且根物体挂有 SetPanel 组件。");
+            Debug.LogWarning("[BeginPanel] 打开 SetPanel 失败，请确认预制体路径为 Resources/UI/SetPanel，且该脚本挂载了 SetPanel 组件！");
             return;
         }
 
@@ -48,6 +56,10 @@ public class BeginPanel : BasePanel
 
     private void OnClickExit()
     {
+        // 播放普通点击音效
+        if (AudioMgr.Instance != null)
+            AudioMgr.Instance.PlayClickSfx();
+
 #if UNITY_EDITOR
         UnityEditor.EditorApplication.isPlaying = false;
 #else

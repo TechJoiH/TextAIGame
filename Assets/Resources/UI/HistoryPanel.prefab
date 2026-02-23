@@ -871,7 +871,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: be3c221330440fc49b6b9391a9a6a236, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  contentRoot: {fileID: 1961623340830243121}
+  contentRoot: {fileID: 0}
   slotPrefab: {fileID: 6163278690470224843, guid: 58258e248634bd247adabe122544c0c4, type: 3}
   closeBtn: {fileID: 2783381423156871709}
 --- !u!1 &7988846783917191020

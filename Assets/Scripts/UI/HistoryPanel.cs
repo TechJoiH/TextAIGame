@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -16,7 +17,14 @@ public class HistoryPanel : BasePanel
         inited = true;
 
         if (closeBtn != null)
-            closeBtn.onClick.AddListener(() => HideMe());
+            closeBtn.onClick.AddListener(() =>
+            {
+                // 播放普通点击音效
+                if (AudioMgr.Instance != null)
+                    AudioMgr.Instance.PlayClickSfx();
+
+                HideMe();
+            });
     }
 
     protected override void OnShowAnimation()
@@ -53,6 +61,10 @@ public class HistoryPanel : BasePanel
 
     private void OnSlotClicked(string saveId)
     {
+        // 播放普通点击音效
+        if (AudioMgr.Instance != null)
+            AudioMgr.Instance.PlayClickSfx();
+
         var state = GameSaveMgr.Instance.LoadCheckpoint(saveId);
         if (state == null)
         {

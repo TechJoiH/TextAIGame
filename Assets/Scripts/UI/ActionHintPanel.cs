@@ -16,7 +16,14 @@ public class ActionHintPanel : BasePanel
     public override void Init()
     {
         // 绑定关闭按钮
-        if (closeBtn != null) closeBtn.onClick.AddListener(() => HideMe());
+        if (closeBtn != null) closeBtn.onClick.AddListener(() =>
+        {
+            // 播放普通点击音效
+            if (AudioMgr.Instance != null)
+                AudioMgr.Instance.PlayClickSfx();
+
+            HideMe();
+        });
 
         // 绑定建议按钮点击事件
         for (int i = 0; i < actionBtns.Length; i++)
@@ -76,6 +83,10 @@ public class ActionHintPanel : BasePanel
     // 应用建议并发送
     private void ApplyHint(string hint)
     {
+        // 播放普通点击音效
+        if (AudioMgr.Instance != null)
+            AudioMgr.Instance.PlayClickSfx();
+
         // 尝试从 UI 管理器获取
         var mainPanel = UIMgr.Instance.GetPanel<MainGamePanel>();
 

@@ -61,7 +61,7 @@ public class SetPanel : BasePanel
 
     /// <summary>
     /// 由外部在打开面板后调用：标记是否从游戏界面打开。
-    /// - true：显示“返回开始界面”
+    /// - true：显示"返回开始界面"
     /// - false：隐藏该按钮
     /// </summary>
     public void SetOpenFromGame(bool fromGame)
@@ -99,11 +99,19 @@ public class SetPanel : BasePanel
 
     private void OnClickClose()
     {
+        // 播放普通点击音效
+        if (AudioMgr.Instance != null)
+            AudioMgr.Instance.PlayClickSfx();
+
         HideMe();
     }
 
     private void OnClickBackToBegin()
     {
+        // 播放打开面板的特殊音效
+        if (AudioMgr.Instance != null)
+            AudioMgr.Instance.PlayPanelOpenSfx();
+
         // 仅在 openedFromGame=true 时按钮才会显示；这里再做一次保护
         if (!openedFromGame)
         {
@@ -117,7 +125,7 @@ public class SetPanel : BasePanel
         // 2) 打开开始面板
         UIMgr.Instance.ShowPanel<BeginPanel>();
 
-        // 3) 重置 GameLoop，使得再次点击“开始”能重新进游戏
+        // 3) 重置 GameLoop，使得再次点击"开始"能重新进游戏
         if (GameLoop.Instance != null)
             GameLoop.Instance.ReturnToBegin();
 
@@ -127,12 +135,20 @@ public class SetPanel : BasePanel
 
     private void OnToggleMusic(bool isOn)
     {
+        // 播放普通点击音效
+        if (AudioMgr.Instance != null)
+            AudioMgr.Instance.PlayClickSfx();
+
         SavePrefs();
         ApplyToAudioMgr();
     }
 
     private void OnToggleSound(bool isOn)
     {
+        // 播放普通点击音效
+        if (AudioMgr.Instance != null)
+            AudioMgr.Instance.PlayClickSfx();
+
         SavePrefs();
         ApplyToAudioMgr();
     }
@@ -186,7 +202,8 @@ public class SetPanel : BasePanel
         if (AudioMgr.Instance != null)
         {
             AudioMgr.Instance.SetVolume(musicVol, soundVol);
-            AudioMgr.Instance.SetMute(!(musicOn && soundOn));
+            AudioMgr.Instance.SetMusicMute(!musicOn);
+            AudioMgr.Instance.SetSfxMute(!soundOn);
         }
     }
 }

@@ -3,7 +3,7 @@ using UnityEngine.UI;
 using UnityEngine.Events;
 using StateData.Role;
 using TMPro;
-using System.Collections; // 协程
+using System.Collections;
 
 public class MainGamePanel : BasePanel
 {
@@ -15,9 +15,9 @@ public class MainGamePanel : BasePanel
     public TMP_Text statusText;
 
     [Header("Top Buttons")]
-    public Button historyButton;     // 打开历史存档面板
+    public Button historyButton;
     public Button hintButton;
-    public Button buttonSet;// 打开行动建议面板
+    public Button buttonSet;
 
     public event UnityAction<string> OnPlayerInput;
 
@@ -43,11 +43,19 @@ public class MainGamePanel : BasePanel
 
     private void OnHistoryClick()
     {
+        // 播放打开面板的特殊音效
+        if (AudioMgr.Instance != null)
+            AudioMgr.Instance.PlayPanelOpenSfx();
+
         UIMgr.Instance.ShowPanel<HistoryPanel>();
     }
 
     private void OnHintClick()
     {
+        // 播放打开面板的特殊音效
+        if (AudioMgr.Instance != null)
+            AudioMgr.Instance.PlayPanelOpenSfx();
+
         UIMgr.Instance.ShowPanel<ActionHintPanel>();
     }
 
@@ -56,6 +64,10 @@ public class MainGamePanel : BasePanel
         if (inputField == null) return;
         if (string.IsNullOrWhiteSpace(inputField.text)) return;
 
+        // 播放普通点击音效
+        if (AudioMgr.Instance != null)
+            AudioMgr.Instance.PlayClickSfx();
+
         string input = inputField.text;
         inputField.text = "";
         OnPlayerInput?.Invoke(input);
@@ -63,6 +75,10 @@ public class MainGamePanel : BasePanel
 
     private void OnSetClick()
     {
+        // 播放打开面板的特殊音效
+        if (AudioMgr.Instance != null)
+            AudioMgr.Instance.PlayPanelOpenSfx();
+
         var panel = UIMgr.Instance.ShowPanel<SetPanel>();
         if (panel != null)
             panel.SetOpenFromGame(true);
