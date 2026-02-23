@@ -1,6 +1,7 @@
 using System.Text;
 using UnityEngine;
 using StateData.Role;
+using StateData.Environment;
 using Logic.Intent;
 using Logic.Memory;
 
@@ -11,10 +12,15 @@ public class GameLoop : MonoBehaviour
     public MainGamePanel gamePanel;
 
     private RoleState playerState;
+    private EnvironmentState envState;
 
     public RoleState CurrentState => playerState;
+    public EnvironmentState CurrentEnvironment => envState;
 
     private bool _gameInited;
+    
+    // 是否启用 LLM 后备意图识别（可在设置中调整）
+    [SerializeField] private bool enableLLMIntentFallback = true;
 
     private void Awake()
     {
@@ -23,25 +29,18 @@ public class GameLoop : MonoBehaviour
 
     private void Start()
     {
-        // 启动时播放 BGM
         if (AudioMgr.Instance != null)
             AudioMgr.Instance.PlayBGM();
 
-        // 启动时只显示开始面板，不初始化/不加载游戏面板
         UIMgr.Instance.ShowPanel<BeginPanel>();
     }
 
-    /// <summary>
-    /// 由 BeginPanel 点击"开始"按钮触发：初始化状态并加载主游戏面板
-    /// </summary>
     public void StartNewGame()
     {
         if (_gameInited) return;
         _gameInited = true;
 
-        // 清空记忆，开始新游戏
         MemoryManager.Instance.ClearAll();
-        
         InitGame();
     }
 
@@ -52,11 +51,13 @@ public class GameLoop : MonoBehaviour
 
         gamePanel = null;
         playerState = null;
+        envState = null;
         _gameInited = false;
     }
 
     private void InitGame()
     {
+        // 初始化角色状态
         playerState = new RoleState();
         playerState.identity.name = "林渊";
         playerState.attributes.level = 1;
@@ -69,7 +70,23 @@ public class GameLoop : MonoBehaviour
         playerState.attributes.intelligence = 12;
         playerState.attributes.expToNextLevel = 100;
         playerState.cultivation.cultivationStage = 1;
-        playerState.equipment.inventory = new System.Collections.Generic.List<string> { "治疗药水", "干粮" };
+        playerState.equipment.inventory = new System.Collections.Generic.List<string> { "治疗药水", "火折" };
+        playerState.equipment.equippedSkills = new System.Collections.Generic.List<string> { "火球术", "御风诀" };
+
+        // 初始化环境状态
+        envState = new EnvironmentState
+        {
+            locationId = "weishan_entrance",
+            locationName = "危摇山·山脚",
+            biome = "山脉",
+            weather = "Foggy",
+            timeOfDay = "Dawn",
+            narrativeHint = "晨雾缭绕，古松苍翠",
+            isWet = false,
+            isDark = false,
+            isFoggy = true,
+            isWindy = false
+        };
 
         gamePanel = UIMgr.Instance.ShowPanel<MainGamePanel>();
         if (gamePanel == null) return;
@@ -79,20 +96,19 @@ public class GameLoop : MonoBehaviour
         gamePanel.OnPlayerInput -= HandlePlayerInput;
         gamePanel.OnPlayerInput += HandlePlayerInput;
         
-        string openingText = "你醒来了。这里是招摇山，空气中弥漫着腥甜的铁锈味...";
+        string openingText = "你缓缓睁眼。四周是危摇山的断崖残壁，雾气浓稠如乳，裹挟着腐朽草木的气息...";
         gamePanel.AppendText(openingText, false);
         
-        // 将开场白加入记忆
         MemoryManager.Instance.AddAssistantMessage(openingText);
     }
 
-    public void LoadGame(RoleState newState, MemorySnapshot memorySnapshot = null)
+    public void LoadGame(RoleState newState, EnvironmentState newEnvState = null, MemorySnapshot memorySnapshot = null)
     {
         if (newState == null) return;
 
         playerState = newState;
+        envState = newEnvState ?? EnvironmentState.GetDefault();
         
-        // 恢复记忆状态
         if (memorySnapshot != null)
         {
             MemoryManager.Instance.RestoreFromSnapshot(memorySnapshot);
@@ -101,40 +117,78 @@ public class GameLoop : MonoBehaviour
         if (gamePanel != null)
         {
             gamePanel.UpdateStateDisplay(playerState);
-            gamePanel.AppendText($"\n<color=yellow>【系统】已回溯至存档点。</color>", false);
+            gamePanel.AppendText($"\n<color=yellow>【系统】已恢复至存档点。</color>", false);
         }
     }
 
     private void HandlePlayerInput(string input)
     {
         gamePanel.AppendText($"{input}", true);
-        
-        // 将玩家输入加入记忆
         MemoryManager.Instance.AddUserMessage(input);
 
-        // 1. 意图识别 + 合法性校验
-        if (!IARProcessor.Instance.CheckActionValidity(input, playerState, out string failReason, out IntentResult intent))
+        // 根据设置选择同步或异步意图识别
+        if (enableLLMIntentFallback)
         {
+            HandlePlayerInputAsync(input);
+        }
+        else
+        {
+            HandlePlayerInputSync(input);
+        }
+    }
+
+    /// <summary>
+    /// 同步处理（仅本地规则引擎）
+    /// </summary>
+    private void HandlePlayerInputSync(string input)
+    {
+        var intent = IntentRecognizer.Instance.Recognize(input);
+        ProcessActionWithIntent(input, intent);
+    }
+
+    /// <summary>
+    /// 异步处理（支持 LLM 后备）
+    /// </summary>
+    private void HandlePlayerInputAsync(string input)
+    {
+        // 显示思考中状态
+        gamePanel.ShowLoading(true);
+
+        IntentRecognizer.Instance.RecognizeAsync(input, (intent) =>
+        {
+            gamePanel.ShowLoading(false);
+            ProcessActionWithIntent(input, intent);
+        });
+    }
+
+    /// <summary>
+    /// 处理已识别意图的行动
+    /// </summary>
+    private void ProcessActionWithIntent(string input, IntentResult intent)
+    {
+        // 1. 合法性校验（含环境因素）
+        if (!IARProcessor.Instance.CheckActionValidity(input, playerState, envState, out string failReason, out IntentResult _))
+        {
+            // 使用传入的 intent 而非校验返回的
             gamePanel.AppendText($"<color=#FF6666>{failReason}</color>", false);
             gamePanel.UpdateStateDisplay(playerState);
             return;
         }
 
-        // 2. 本地确定性逻辑执行
-        string logicResult = IARProcessor.Instance.ExecuteDeterministicLogic(input, playerState, intent);
+        // 2. 执行确定性逻辑
+        string logicResult = IARProcessor.Instance.ExecuteDeterministicLogic(input, playerState, envState, intent);
         gamePanel.UpdateStateDisplay(playerState);
 
-        // 3. 构建带记忆上下文的提示词
+        // 3. 构建提示词（含环境状态）
         string systemPrompt = PromptBuilder.BuildSystemPrompt();
-        string userPrompt = PromptBuilder.BuildUserPromptWithIntent(input, playerState, logicResult, intent);
+        string userPrompt = PromptBuilder.BuildUserPromptWithIntent(input, playerState, envState, logicResult, intent);
         
-        // 构建包含记忆的消息数组
         var messages = MemoryManager.Instance.BuildMessagesWithMemory(systemPrompt, userPrompt);
 
         gamePanel.ShowLoading(true);
         StringBuilder fullContentBuffer = new StringBuilder();
 
-        // 4. 调用云端 LLM 生成叙事（使用带记忆的消息）
+        // 4. 流式 LLM 请求
         LLMService.Instance.PostStreamWithMessages(
             messages,
             onTokenReceived: (token) =>
@@ -154,17 +208,13 @@ public class GameLoop : MonoBehaviour
                 gamePanel.ShowLoading(false);
                 gamePanel.FinishStream();
 
-                // 播放翻页音效（AI生成文字完成后）
                 if (AudioMgr.Instance != null)
                     AudioMgr.Instance.PlayPageTurnSfx();
 
-                // 6. 将AI回复加入记忆
                 MemoryManager.Instance.AddAssistantMessage(rawText);
-                
-                // 7. 存档（包含记忆快照）
-                GameSaveMgr.Instance.CreateCheckpoint(playerState, input);
+                GameSaveMgr.Instance.CreateCheckpoint(playerState, envState, input);
 
-                Debug.Log($"回合结束。意图: {intent} | 记忆: {MemoryManager.Instance.GetDebugInfo()}");
+                Debug.Log($"回合结束。意图: {intent} | 来源: {intent.recognitionSource}");
             }
         );
     }

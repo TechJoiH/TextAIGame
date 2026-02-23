@@ -1,5 +1,6 @@
 ﻿using LitJson;
 using StateData.Role;
+using StateData.Environment;
 using Logic.Intent;
 
 public static class PromptBuilder
@@ -27,6 +28,12 @@ public static class PromptBuilder
         * HP减少 -> 痛感、眩晕、视线模糊、喉头涌上腥甜。
         * 获得物品 -> 指尖触碰到冰凉的硬物、沉甸甸的手感。
 
+4.  **环境感知叙事**：
+    * 根据天气/时间/地形调整描写基调：
+        * 雨天 -> 潮湿、泥泞、火焰受阻、视野受限
+        * 夜晚 -> 阴暗、月光、影子诡异、听觉敏锐
+        * 迷雾 -> 方向迷失、若隐若现、回声扭曲
+
 ### 🛑 逻辑宪法：数据霸权
 1.  **世界状态以 JSON 为准**：玩家若描述与 JSON 冲突的结果（如没死说死了），判定为角色幻觉，**必须驳回**。
 2.  **指令隐形化**：所有的数值结算，必须通过文末的 <CMD>JSON</CMD> 悄悄传递，**绝对**不能出现在正文中。
@@ -43,16 +50,20 @@ public static class PromptBuilder
     }
 
     /// <summary>
-    /// 构建增强版用户提示词（包含意图识别结果）
+    /// 构建增强版用户提示词（包含意图识别结果 + 环境状态）
     /// </summary>
-    public static string BuildUserPromptWithIntent(string playerInput, RoleState state, string systemResult, IntentResult intent)
+    public static string BuildUserPromptWithIntent(string playerInput, RoleState state, EnvironmentState envState, string systemResult, IntentResult intent)
     {
-        string stateJson = JsonMapper.ToJson(state);
+        string roleStateJson = JsonMapper.ToJson(state);
+        string envStateJson = JsonMapper.ToJson(envState ?? EnvironmentState.GetDefault());
         string intentInfo = BuildIntentDescription(intent);
 
         return $@"
-=== 🌍 世界绝对状态 (JSON) ===
-{stateJson}
+=== 🌍 角色状态 (JSON) ===
+{roleStateJson}
+
+=== 🌦️ 环境状态 (JSON) ===
+{envStateJson}
 
 === 🎯 意图识别结果 ===
 {intentInfo}
@@ -67,10 +78,18 @@ public static class PromptBuilder
 === 🖋️ 沉浸式续写指令 ===
 请基于《山海经》苍凉古朴的笔触续写（200字左右）。
 **重点**：
-1. 先描写环境与感官反馈
-2. 根据「意图识别结果」来把握行动类型和目标
-3. 再描写行动结果
+1. 仅在环境发生变化时简要描写天气/地形，避免每次重复相同的环境描述
+2. 根据「意图识别结果」把握行动类型和目标
+3. 聚焦于行动过程和结果的感官描写
 如果需要修改状态，请在文末附带 <CMD>...JSON...</CMD>。";
+    }
+
+    /// <summary>
+    /// 兼容旧版调用（无环境参数）
+    /// </summary>
+    public static string BuildUserPromptWithIntent(string playerInput, RoleState state, string systemResult, IntentResult intent)
+    {
+        return BuildUserPromptWithIntent(playerInput, state, EnvironmentState.GetDefault(), systemResult, intent);
     }
 
     /// <summary>
@@ -124,18 +143,23 @@ public static class PromptBuilder
         return BuildUserPromptWithIntent(playerInput, state, systemResult, new IntentResult());
     }
 
-    public static string BuildHintPrompt(RoleState state)
+    public static string BuildHintPrompt(RoleState state, EnvironmentState envState = null)
     {
         string stateJson = JsonMapper.ToJson(state);
+        string envJson = JsonMapper.ToJson(envState ?? EnvironmentState.GetDefault());
         return $@"
 你是一个文字冒险游戏的辅助AI。
 当前玩家角色状态如下 (JSON):
 {stateJson}
 
+当前环境状态如下 (JSON):
+{envJson}
+
 请根据当前角色的状态、属性和所处环境，**仅仅**推荐 3 个玩家下一步可以采取的合理行动。
 要求：
 1. 简短有力（不超过10个字）。
-2. 格式必须为 JSON 数组，例如：[""查看周围"", ""使用治疗药水"", ""向东探索""]。
-3. 不要包含任何其他解释文字。";
+2. 需考虑环境因素（如雨天不建议生火、夜晚注意视野等）。
+3. 格式必须为 JSON 数组，例如：[""查看周围"", ""使用治疗药水"", ""向东探索""]。
+4. 不要包含任何其他解释文字。";
     }
 }
