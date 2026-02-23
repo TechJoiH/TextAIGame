@@ -18,6 +18,7 @@ public class MainGamePanel : BasePanel
     public Button historyButton;
     public Button hintButton;
     public Button buttonSet;
+    public Button knowledgeGraphButton;  // 新增：知识图谱按钮
 
     public event UnityAction<string> OnPlayerInput;
 
@@ -39,6 +40,10 @@ public class MainGamePanel : BasePanel
             hintButton.onClick.AddListener(OnHintClick);
         if (buttonSet != null)
             buttonSet.onClick.AddListener(OnSetClick);
+
+        // 新增：绑定知识图谱按钮
+        if (knowledgeGraphButton != null)
+            knowledgeGraphButton.onClick.AddListener(OnKnowledgeGraphClick);
     }
 
     private void OnHistoryClick()
@@ -57,6 +62,17 @@ public class MainGamePanel : BasePanel
             AudioMgr.Instance.PlayPanelOpenSfx();
 
         UIMgr.Instance.ShowPanel<ActionHintPanel>();
+    }
+
+    /// <summary>
+    /// 新增：打开知识图谱面板
+    /// </summary>
+    private void OnKnowledgeGraphClick()
+    {
+        if (AudioMgr.Instance != null)
+            AudioMgr.Instance.PlayPanelOpenSfx();
+
+        UIMgr.Instance.ShowPanel<KnowledgeGraphPanel>();
     }
 
     private void OnSendClick()
@@ -87,7 +103,7 @@ public class MainGamePanel : BasePanel
     // 【优化】添加静态文本（玩家或系统提示）
     public void AppendText(string text, bool isPlayer)
     {
-        string color = isPlayer ? "#FFD700" : "#FFFFFF"; // 玩家金色，系统白色
+        string color = isPlayer ? "#4E342E" : "#000000"; // 玩家深棕色，系统黑色
 
         // 逻辑优化：如果当前是空的，就不加换行；否则在前面加一个换行，而不是前后都加
         string prefix = string.IsNullOrEmpty(currentStoryContent) ? "" : "\n";
@@ -151,9 +167,9 @@ public class MainGamePanel : BasePanel
         if (sendButton != null) sendButton.interactable = !isLoading;
         if (inputField != null) inputField.interactable = !isLoading;
 
-        // 可选：加载时禁用顶部按钮，避免并发请求/回档冲突
         if (historyButton != null) historyButton.interactable = !isLoading;
         if (hintButton != null) hintButton.interactable = !isLoading;
+        if (knowledgeGraphButton != null) knowledgeGraphButton.interactable = !isLoading;  // 新增
     }
 
     private void UpdateUIText()
