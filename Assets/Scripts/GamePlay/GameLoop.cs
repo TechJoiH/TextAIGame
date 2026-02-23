@@ -4,6 +4,8 @@ using StateData.Role;
 using StateData.Environment;
 using Logic.Intent;
 using Logic.Memory;
+using Logic.GraphRAG;
+using Data.KnowledgeGraph;
 
 public class GameLoop : MonoBehaviour
 {
@@ -22,6 +24,12 @@ public class GameLoop : MonoBehaviour
     // 是否启用 LLM 后备意图识别（可在设置中调整）
     [SerializeField] private bool enableLLMIntentFallback = true;
 
+    // 音频设置的 PlayerPrefs 键
+    private const string PrefMusicOn = "SET_MUSIC_ON";
+    private const string PrefSoundOn = "SET_SOUND_ON";
+    private const string PrefMusicVol = "SET_MUSIC_VOL";
+    private const string PrefSoundVol = "SET_SOUND_VOL";
+
     private void Awake()
     {
         Instance = this;
@@ -29,10 +37,29 @@ public class GameLoop : MonoBehaviour
 
     private void Start()
     {
+        // 先初始化音频设置，再播放BGM
+        InitAudioSettings();
+
         if (AudioMgr.Instance != null)
             AudioMgr.Instance.PlayBGM();
 
         UIMgr.Instance.ShowPanel<BeginPanel>();
+    }
+
+    /// <summary>
+    /// 从 PlayerPrefs 加载并应用音频设置
+    /// </summary>
+    private void InitAudioSettings()
+    {
+        bool musicOn = PlayerPrefs.GetInt(PrefMusicOn, 1) == 1;
+        bool soundOn = PlayerPrefs.GetInt(PrefSoundOn, 1) == 1;
+        float musicVol = PlayerPrefs.GetFloat(PrefMusicVol, 1f);
+        float soundVol = PlayerPrefs.GetFloat(PrefSoundVol, 1f);
+
+        if (AudioMgr.Instance != null)
+        {
+            AudioMgr.Instance.InitData(musicOn, soundOn, musicVol, soundVol);
+        }
     }
 
     public void StartNewGame()
@@ -100,6 +127,21 @@ public class GameLoop : MonoBehaviour
         gamePanel.AppendText(openingText, false);
         
         MemoryManager.Instance.AddAssistantMessage(openingText);
+
+        // 通过实体ID解锁单个实体
+        GraphRAGManager.Instance.DiscoverEntity("beast_jiuwei");   // 解锁九尾狐
+        GraphRAGManager.Instance.DiscoverEntity("beast_bifang");   // 解锁毕方
+        GraphRAGManager.Instance.DiscoverEntity("herb_zhucao");    // 解锁祝草
+        GraphRAGManager.Instance.DiscoverEntity("loc_qingqiu");    // 解锁青丘
+
+        // 在 MainGamePanel 或其他地方监听
+        EventCenter.Instance.AddListener<KnowledgeEntity>("OnKnowledgeDiscovered", OnEntityDiscovered);
+    }
+
+    private void OnEntityDiscovered(KnowledgeEntity entity)
+    {
+        // 显示解锁提示
+        gamePanel.AppendText($"<color=#FFD700>【知识解锁】发现了「{entity.name}」！</color>", false);
     }
 
     public void LoadGame(RoleState newState, EnvironmentState newEnvState = null, MemorySnapshot memorySnapshot = null)
@@ -202,6 +244,9 @@ public class GameLoop : MonoBehaviour
                 
                 // 5. 解析 AI 返回的指令并应用
                 IARProcessor.Instance.AnalyzeAndApplyAIResult(rawText, playerState);
+
+                // ★★★ 新增：从AI回复中提取并解锁知识图谱实体 ★★★
+                GraphRAGManager.Instance.ExtractAndDiscoverFromText(rawText);
 
                 gamePanel.RemoveCmdTagsFromUI();
                 gamePanel.UpdateStateDisplay(playerState);

@@ -133,6 +133,7 @@ GameObject:
   - component: {fileID: 466549673}
   - component: {fileID: 466549672}
   - component: {fileID: 466549671}
+  - component: {fileID: 466549674}
   m_Layer: 0
   m_Name: Main Camera
   m_TagString: MainCamera
@@ -214,6 +215,22 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &466549674
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 466549670}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4845055e1b090ba4aaabc3d71f3fda29, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  bgmClip: {fileID: 8300000, guid: 2c282a5e147bd274198de897f989fb1f, type: 3}
+  clickSfx: {fileID: 8300000, guid: 174bba4d06ff98042bb2740de00757ce, type: 3}
+  panelOpenSfx: {fileID: 8300000, guid: 99f29f637c65018499f82f40d0a00f63, type: 3}
+  pageTurnSfx: {fileID: 8300000, guid: da36b4dfd05f1b54e8149ed023bc51b9, type: 3}
 --- !u!1 &609996303
 GameObject:
   m_ObjectHideFlags: 0
@@ -373,6 +390,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   gamePanel: {fileID: 5725104175851599278, guid: a416a81c1de2319488cfb9a0061824d6, type: 3}
+  enableLLMIntentFallback: 1
 --- !u!4 &836533610
 Transform:
   m_ObjectHideFlags: 0

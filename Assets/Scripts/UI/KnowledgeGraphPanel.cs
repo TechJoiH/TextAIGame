@@ -122,16 +122,12 @@ public class KnowledgeGraphPanel : BasePanel
     {
         GameObject obj = Instantiate(entityItemPrefab, contentRoot, false);
         
-        // 获取子组件
-        var nameText = obj.transform.Find("NameText")?.GetComponent<TMP_Text>();
-        var typeText = obj.transform.Find("TypeText")?.GetComponent<TMP_Text>();
+        // 获取子对象中的 TMP_Text 组件
+        var nameText = obj.GetComponentInChildren<TMP_Text>();
         var button = obj.GetComponent<Button>();
 
         if (nameText != null)
             nameText.text = entity.name;
-
-        if (typeText != null)
-            typeText.text = GetEntityTypeName(entity.entityType);
 
         // 点击显示详情
         button?.onClick.AddListener(() => ShowEntityDetail(entity));
