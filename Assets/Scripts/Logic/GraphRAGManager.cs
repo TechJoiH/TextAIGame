@@ -8,117 +8,78 @@ using Data.KnowledgeGraph;
 namespace Logic.GraphRAG
 {
     /// <summary>
-    /// GraphRAG-Lite ÖªÊ¶Í¼Æ×¹ÜÀíÆ÷
-    /// »ùÓÚ C# LINQ µÄ±¾µØÄÚ´æ¼¶ÖªÊ¶¼ìË÷
+    /// GraphRAG-Lite çŸ¥è¯†å›¾è°±ç®¡ç†å™¨
+    /// è´Ÿè´£æœ¬åœ°çŸ¥è¯†åŠ è½½ã€æ£€ç´¢ã€å‘ç°ä¸å­˜æ¡£æ¢å¤ã€‚
     /// </summary>
     public class GraphRAGManager : MonoSingleton<GraphRAGManager>
     {
-        [Header("ÅäÖÃ")]
-        [SerializeField] private TextAsset shanHaiJingData;  // É½º£¾­JSONÊı¾İ
+        private const string DefaultKnowledgeResourcePath = "Data/ShanHaiKnowledge";
 
-        // ºËĞÄÊı¾İ½á¹¹
-        private Dictionary<string, KnowledgeEntity> _entityDict = new Dictionary<string, KnowledgeEntity>();
-        private List<KnowledgeRelation> _relations = new List<KnowledgeRelation>();
-        private HashSet<string> _discoveredIds = new HashSet<string>();
+        [Header("é…ç½®")]
+        [SerializeField] private TextAsset shanHaiJingData;
 
-        // Ë÷Òı½á¹¹£¨¼ÓËÙ¼ìË÷£©
-        private Dictionary<EntityType, List<string>> _typeIndex = new Dictionary<EntityType, List<string>>();
-        private Dictionary<string, List<KnowledgeRelation>> _relationIndex = new Dictionary<string, List<KnowledgeRelation>>();
+        private readonly Dictionary<string, KnowledgeEntity> _entityDict = new Dictionary<string, KnowledgeEntity>();
+        private readonly List<KnowledgeRelation> _relations = new List<KnowledgeRelation>();
+        private readonly HashSet<string> _discoveredIds = new HashSet<string>();
+        private readonly Dictionary<EntityType, List<string>> _typeIndex = new Dictionary<EntityType, List<string>>();
+        private readonly Dictionary<string, List<KnowledgeRelation>> _relationIndex = new Dictionary<string, List<KnowledgeRelation>>();
 
-        /// <summary>
-        /// ÒÑ·¢ÏÖµÄÊµÌåÊıÁ¿
-        /// </summary>
         public int DiscoveredCount => _discoveredIds.Count;
-
-        /// <summary>
-        /// ×ÜÊµÌåÊıÁ¿
-        /// </summary>
         public int TotalCount => _entityDict.Count;
 
         protected override void Awake()
         {
             base.Awake();
-            InitializeShanHaiJingKnowledge();
+            InitializeKnowledgeLibrary();
         }
 
-        /// <summary>
-        /// ³õÊ¼»¯¡¶É½º£¾­¡·ÖªÊ¶¿â
-        /// </summary>
-        private void InitializeShanHaiJingKnowledge()
+        public void InitializeKnowledgeLibrary()
         {
-            // Ô¤ÖÃ¡¶É½º£¾­¡·ÒìÊŞÊı¾İ
-            AddEntity(new KnowledgeEntity("beast_jiuwei", "¾ÅÎ²ºü", EntityType.Beast,
-                "ÇàÇğÖ®É½ÓĞÊŞÑÉ£¬Æä×´Èçºü¶ø¾ÅÎ²£¬ÆäÒôÈçÓ¤¶ù£¬ÄÜÊ³ÈË£¬Ê³Õß²»¹Æ¡£",
-                "É½º£¾­¡¤ÄÏÉ½¾­")
-            { tags = new List<string> { "ÉñÊŞ", "ÇàÇğ", "¾ÅÎ²" } });
+            ClearLibrary();
 
-            AddEntity(new KnowledgeEntity("beast_bifang", "±Ï·½", EntityType.Beast,
-                "ÕÂİ­Ö®É½ÓĞÄñÑÉ£¬Æä×´Èçº×£¬Ò»×ã£¬³àÎÄÇàÖÊ¶ø°×à¹£¬ÃûÔ»±Ï·½£¬ÆäÃù×Ô½ĞÒ²£¬¼ûÔòÆäÒØÓĞ¶ï»ğ¡£",
-                "É½º£¾­¡¤Î÷É½¾­")
-            { tags = new List<string> { "ÉñÄñ", "»ğ", "Ò»×ã" } });
+            if (!TryLoadKnowledgeFromJson())
+            {
+                SeedFallbackKnowledge();
+            }
 
-            AddEntity(new KnowledgeEntity("beast_hundun", "»ìãç", EntityType.Beast,
-                "ÌìÉ½ÓĞÉñÑÉ£¬Æä×´Èç»ÆÄÒ£¬³àÈçµ¤»ğ£¬Áù×ãËÄÒí£¬»ë¶ØÎŞÃæÄ¿¡£",
-                "É½º£¾­¡¤Î÷É½¾­")
-            { tags = new List<string> { "Ğ×ÊŞ", "ÎŞÃæ", "»ìãç" } });
-
-            AddEntity(new KnowledgeEntity("beast_qiongqi", "ÇîÆæ", EntityType.Beast,
-                "ßÉ½ÓĞÊŞÑÉ£¬Æä×´ÈçÅ£¶ø»¢ÎÄ£¬ÆäÒôÈç·ÍÈ®£¬ÊÇÊ³ÈË¡£",
-                "É½º£¾­¡¤Î÷É½¾­")
-            { tags = new List<string> { "Ğ×ÊŞ", "Ê³ÈË", "ËÄĞ×" } });
-
-            AddEntity(new KnowledgeEntity("beast_taowu", "—ƒè»", EntityType.Beast,
-                "ÓĞÊŞÑÉ£¬Æä×´Èç»¢¶øÈ®Ã«£¬³¤¶ş³ß£¬ÈËÃæ£¬»¢×ã£¬ÖíÑÀ£¬Î²³¤Ò»ÕÉ°Ë³ß£¬½ÁÂÒ»ÄÖĞ£¬ÃûÔ»—ƒè»¡£",
-                "É½º£¾­¡¤Î÷É½¾­")
-            { tags = new List<string> { "Ğ×ÊŞ", "ÈËÃæ", "ËÄĞ×" } });
-
-            // Ô¤ÖÃ¡¶É½º£¾­¡·²İÒ©Êı¾İ
-            AddEntity(new KnowledgeEntity("herb_zhucao", "×£Óà", EntityType.Herb,
-                "ÕĞÒ¡Ö®É½ÓĞ²İÑÉ£¬Æä×´Èç¾Â¶øÇà»ª£¬ÆäÃûÔ»×£Óà£¬Ê³Ö®²»¼¢¡£",
-                "É½º£¾­¡¤ÄÏÉ½¾­")
-            { tags = new List<string> { "±Ù¹È", "¹û¸¹" }, properties = new Dictionary<string, string> { { "effect", "food_restore" } } });
-
-            AddEntity(new KnowledgeEntity("herb_migu", "ÃÔ¹È", EntityType.Herb,
-                "ÕĞÒ¡Ö®É½ÓĞÄ¾ÑÉ£¬Æä×´Èç˜b¶øºÚÀí£¬Æä»ªËÄÕÕ£¬ÆäÃûÔ»ÃÔ˜b£¬ÅåÖ®²»ÃÔ¡£",
-                "É½º£¾­¡¤ÄÏÉ½¾­")
-            { tags = new List<string> { "Ö¸Â·", "±ÜĞ°" }, properties = new Dictionary<string, string> { { "effect", "anti_confusion" } } });
-
-            AddEntity(new KnowledgeEntity("herb_shahua", "É³ÌÄ", EntityType.Herb,
-                "À¥ÂØÖ®ÇğÓĞÄ¾ÑÉ£¬Æä×´ÈçÌÄ£¬»Æ»ª³àÊµ£¬ÆäÎ¶ÈçÀî¶øÎŞºË£¬ÃûÔ»É³ÌÄ£¬¿ÉÒÔÓùË®£¬Ê³Ö®Ê¹ÈË²»Äç¡£",
-                "É½º£¾­¡¤Î÷É½¾­")
-            { tags = new List<string> { "Ë®ĞÔ", "ÓùË®" }, properties = new Dictionary<string, string> { { "effect", "water_breathing" } } });
-
-            // Ô¤ÖÃµØµãÊı¾İ
-            AddEntity(new KnowledgeEntity("loc_qingqiu", "ÇàÇğ", EntityType.Location,
-                "ÓÖ¶«Èı°ÙÀï£¬Ô»ÇàÇğÖ®É½£¬ÆäÑô¶àÓñ£¬ÆäÒõ¶àÇàëo¡£",
-                "É½º£¾­¡¤ÄÏÉ½¾­")
-            { tags = new List<string> { "ÏÉÉ½", "ÓñÊ¯" } });
-
-            AddEntity(new KnowledgeEntity("loc_kunlun", "À¥ÂØ", EntityType.Location,
-                "À¥ÂØÖ®Çğ£¬ÊÇÊµÎ©µÛÖ®ÏÂ¶¼£¬ÉñÂ½ÎáË¾Ö®£¬ÆäÉñ×´»¢Éí¶ø¾ÅÎ²£¬ÈËÃæ¶ø»¢×¦¡£",
-                "É½º£¾­¡¤Î÷É½¾­")
-            { tags = new List<string> { "ÉñÉ½", "µÛ¶¼", "Î÷ÍõÄ¸" } });
-
-            // Ìí¼Ó¹ØÏµ
-            AddRelation(new KnowledgeRelation("beast_jiuwei", "loc_qingqiu", RelationType.FoundIn, "¾ÅÎ²ºü³öÃ»ÓÚÇàÇğÖ®É½"));
-            AddRelation(new KnowledgeRelation("herb_shahua", "loc_kunlun", RelationType.GrowsIn, "É³ÌÄÉú³¤ÓÚÀ¥ÂØÖ®Çğ"));
-            AddRelation(new KnowledgeRelation("herb_migu", "beast_hundun", RelationType.CounteredBy, "ÃÔ¹È¿ÉÆÆ»ìãçÃÔÕÏ"));
-
-            Debug.Log($"[GraphRAG] ÖªÊ¶¿â³õÊ¼»¯Íê³É: {_entityDict.Count} ÊµÌå, {_relations.Count} ¹ØÏµ");
+            ResetDiscoveredState();
+            Debug.Log($"[GraphRAG] çŸ¥è¯†åº“åˆå§‹åŒ–å®Œæˆ: {_entityDict.Count} å®ä½“, {_relations.Count} å…³ç³»");
         }
 
-        #region ÊµÌåÓë¹ØÏµ¹ÜÀí
+        public void ResetDiscoveredState()
+        {
+            _discoveredIds.Clear();
+            foreach (var entity in _entityDict.Values)
+            {
+                entity.isDiscovered = false;
+                entity.discoveredAt = 0;
+            }
+        }
 
-        /// <summary>
-        /// Ìí¼ÓÊµÌå
-        /// </summary>
+        public bool IsEntityDiscovered(string entityId)
+        {
+            return !string.IsNullOrWhiteSpace(entityId) && _discoveredIds.Contains(entityId);
+        }
+
+        public KnowledgeEntity GetEntityById(string entityId)
+        {
+            if (string.IsNullOrWhiteSpace(entityId))
+                return null;
+
+            _entityDict.TryGetValue(entityId, out var entity);
+            return entity;
+        }
+
         public void AddEntity(KnowledgeEntity entity)
         {
-            if (entity == null || string.IsNullOrEmpty(entity.id)) return;
+            if (entity == null || string.IsNullOrEmpty(entity.id))
+                return;
+
+            entity.tags ??= new List<string>();
+            entity.properties ??= new Dictionary<string, string>();
 
             _entityDict[entity.id] = entity;
 
-            // ¸üĞÂÀàĞÍË÷Òı
             if (!_typeIndex.ContainsKey(entity.entityType))
                 _typeIndex[entity.entityType] = new List<string>();
 
@@ -126,104 +87,117 @@ namespace Logic.GraphRAG
                 _typeIndex[entity.entityType].Add(entity.id);
         }
 
-        /// <summary>
-        /// Ìí¼Ó¹ØÏµ
-        /// </summary>
         public void AddRelation(KnowledgeRelation relation)
         {
-            if (relation == null) return;
+            if (relation == null || string.IsNullOrWhiteSpace(relation.fromId) || string.IsNullOrWhiteSpace(relation.toId))
+                return;
 
             _relations.Add(relation);
-
-            // ¸üĞÂ¹ØÏµË÷Òı
-            if (!_relationIndex.ContainsKey(relation.fromId))
-                _relationIndex[relation.fromId] = new List<KnowledgeRelation>();
-            _relationIndex[relation.fromId].Add(relation);
-
-            if (!_relationIndex.ContainsKey(relation.toId))
-                _relationIndex[relation.toId] = new List<KnowledgeRelation>();
-            _relationIndex[relation.toId].Add(relation);
+            IndexRelation(relation);
         }
 
-        /// <summary>
-        /// ±ê¼ÇÊµÌåÎªÒÑ·¢ÏÖ
-        /// </summary>
         public void DiscoverEntity(string entityId)
         {
-            if (!_entityDict.ContainsKey(entityId)) return;
+            if (!_entityDict.ContainsKey(entityId))
+                return;
 
             var entity = _entityDict[entityId];
-            if (!entity.isDiscovered)
-            {
-                entity.isDiscovered = true;
-                entity.discoveredAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-                _discoveredIds.Add(entityId);
+            if (entity.isDiscovered)
+                return;
 
-                Debug.Log($"<color=green>[GraphRAG] ·¢ÏÖĞÂÖªÊ¶: {entity.name}</color>");
+            entity.isDiscovered = true;
+            entity.discoveredAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            _discoveredIds.Add(entityId);
 
-                // ´¥·¢ÊÂ¼şÍ¨ÖªUI¸üĞÂ
-                EventCenter.Instance.Broadcast("OnKnowledgeDiscovered", entity);
-            }
+            Debug.Log($"<color=green>[GraphRAG] å‘ç°æ–°çŸ¥è¯†: {entity.name}</color>");
+            EventCenter.Instance.Broadcast("OnKnowledgeDiscovered", entity);
         }
 
-        #endregion
-
-        #region LINQ ¼ìË÷·½·¨
-
-        /// <summary>
-        /// °´Ãû³ÆÄ£ºıËÑË÷ÊµÌå
-        /// </summary>
         public List<KnowledgeEntity> SearchByName(string keyword)
         {
-            if (string.IsNullOrEmpty(keyword)) return new List<KnowledgeEntity>();
+            if (string.IsNullOrWhiteSpace(keyword))
+                return new List<KnowledgeEntity>();
 
             return _entityDict.Values
-                .Where(e => e.name.Contains(keyword) || e.description.Contains(keyword))
+                .Where(e =>
+                    (!string.IsNullOrEmpty(e.name) && e.name.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0) ||
+                    (!string.IsNullOrEmpty(e.description) && e.description.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0))
                 .OrderByDescending(e => e.isDiscovered)
                 .ThenBy(e => e.name)
                 .ToList();
         }
 
-        /// <summary>
-        /// °´ÀàĞÍ»ñÈ¡ÊµÌå
-        /// </summary>
         public List<KnowledgeEntity> GetEntitiesByType(EntityType type, bool onlyDiscovered = false)
         {
-            if (!_typeIndex.ContainsKey(type)) return new List<KnowledgeEntity>();
+            if (!_typeIndex.ContainsKey(type))
+                return new List<KnowledgeEntity>();
 
-            var query = _typeIndex[type]
+            IEnumerable<KnowledgeEntity> query = _typeIndex[type]
+                .Where(id => _entityDict.ContainsKey(id))
                 .Select(id => _entityDict[id]);
 
             if (onlyDiscovered)
                 query = query.Where(e => e.isDiscovered);
 
-            return query.OrderBy(e => e.name).ToList();
+            return query.OrderByDescending(e => e.isDiscovered).ThenBy(e => e.name).ToList();
         }
 
-        /// <summary>
-        /// »ñÈ¡ÊµÌåµÄËùÓĞ¹ØÁªÊµÌå£¨Ò»½×ÁÚ¾Ó£©
-        /// </summary>
         public List<(KnowledgeEntity entity, KnowledgeRelation relation)> GetRelatedEntities(string entityId)
         {
             var result = new List<(KnowledgeEntity, KnowledgeRelation)>();
+            if (string.IsNullOrWhiteSpace(entityId) || !_relationIndex.ContainsKey(entityId))
+                return result;
 
-            if (!_relationIndex.ContainsKey(entityId)) return result;
-
-            foreach (var rel in _relationIndex[entityId])
+            foreach (var relation in _relationIndex[entityId])
             {
-                string relatedId = rel.fromId == entityId ? rel.toId : rel.fromId;
-                if (_entityDict.ContainsKey(relatedId))
+                string relatedId = relation.fromId == entityId ? relation.toId : relation.fromId;
+                if (_entityDict.TryGetValue(relatedId, out var relatedEntity))
                 {
-                    result.Add((_entityDict[relatedId], rel));
+                    result.Add((relatedEntity, relation));
                 }
             }
 
             return result;
         }
 
-        /// <summary>
-        /// »ñÈ¡ËùÓĞÒÑ·¢ÏÖµÄÊµÌå
-        /// </summary>
+        public string GetRelationDisplayText(KnowledgeEntity focusEntity, KnowledgeEntity relatedEntity, KnowledgeRelation relation)
+        {
+            if (focusEntity == null || relatedEntity == null || relation == null)
+                return string.Empty;
+
+            if (!string.IsNullOrWhiteSpace(relation.description))
+                return relation.description.Trim();
+
+            bool focusIsSource = relation.fromId == focusEntity.id;
+
+            return relation.relationType switch
+            {
+                RelationType.FoundIn => focusIsSource
+                    ? $"{focusEntity.name}å‡ºæ²¡äº{relatedEntity.name}"
+                    : $"{relatedEntity.name}å¸¸å‡ºæ²¡äºæ­¤",
+                RelationType.GrowsIn => focusIsSource
+                    ? $"{focusEntity.name}ç”Ÿäº{relatedEntity.name}"
+                    : $"æ­¤åœ°ç”Ÿæœ‰{relatedEntity.name}",
+                RelationType.Drops => focusIsSource
+                    ? $"{focusEntity.name}å¯æ‰è½{relatedEntity.name}"
+                    : $"{relatedEntity.name}å¯ä»{relatedEntity.name}ä¹‹å¤–è·å¾—",
+                RelationType.CounteredBy => focusIsSource
+                    ? $"{focusEntity.name}å¯è¢«{relatedEntity.name}å…‹åˆ¶"
+                    : $"{focusEntity.name}å¯å…‹åˆ¶{relatedEntity.name}",
+                RelationType.Cures => focusIsSource
+                    ? $"{focusEntity.name}å¯æ²»ç–—{relatedEntity.name}"
+                    : $"{relatedEntity.name}å¯ç”¨{focusEntity.name}ç¼“è§£",
+                RelationType.HostileTo => $"ä¸{relatedEntity.name}æ•Œå¯¹",
+                RelationType.SymbioticWith => $"ä¸{relatedEntity.name}å…±ç”Ÿ",
+                RelationType.RequiredFor => focusIsSource
+                    ? $"{focusEntity.name}å¸¸ç”¨äº{relatedEntity.name}"
+                    : relatedEntity.entityType == EntityType.Herb
+                        ? $"å¯å€Ÿ{relatedEntity.name}åº”å¯¹æ­¤åœ°å¼‚çŠ¶"
+                        : $"ä¸{relatedEntity.name}ç›¸å…³",
+                _ => $"ä¸{relatedEntity.name}ç›¸å…³"
+            };
+        }
+
         public List<KnowledgeEntity> GetAllDiscoveredEntities()
         {
             return _discoveredIds
@@ -233,158 +207,414 @@ namespace Logic.GraphRAG
                 .ToList();
         }
 
-        /// <summary>
-        /// »ñÈ¡ËùÓĞÊµÌå£¨°üÀ¨Î´½âËøµÄ£©
-        /// </summary>
         public List<KnowledgeEntity> GetAllEntities()
         {
             return _entityDict.Values
-                .OrderByDescending(e => e.isDiscovered)  // ÒÑ½âËøµÄÅÅÇ°Ãæ
+                .OrderByDescending(e => e.isDiscovered)
                 .ThenBy(e => e.name)
                 .ToList();
         }
 
-        /// <summary>
-        /// °´±êÇ©ËÑË÷ÊµÌå
-        /// </summary>
         public List<KnowledgeEntity> SearchByTag(string tag)
         {
+            if (string.IsNullOrWhiteSpace(tag))
+                return new List<KnowledgeEntity>();
+
             return _entityDict.Values
-                .Where(e => e.tags != null && e.tags.Contains(tag))
+                .Where(e => e.tags != null && e.tags.Any(t => string.Equals(t, tag, StringComparison.OrdinalIgnoreCase)))
+                .OrderByDescending(e => e.isDiscovered)
                 .ToList();
         }
 
-        /// <summary>
-        /// ÓïÒå¼ìË÷£º¸ù¾İÉÏÏÂÎÄ¹Ø¼ü´Ê²éÕÒÏà¹ØÖªÊ¶
-        /// </summary>
         public List<KnowledgeEntity> SemanticRetrieve(string context, int topK = 5)
         {
-            if (string.IsNullOrEmpty(context)) return new List<KnowledgeEntity>();
+            if (string.IsNullOrWhiteSpace(context))
+                return new List<KnowledgeEntity>();
 
-            // ¼òµ¥µÄ¹Ø¼ü´ÊÆ¥ÅäÆÀ·Ö
-            var scored = _entityDict.Values
-                .Select(e => new
+            return _entityDict.Values
+                .Select(entity => new
                 {
-                    Entity = e,
-                    Score = CalculateRelevanceScore(e, context)
+                    Entity = entity,
+                    Score = CalculateRelevanceScore(entity, context)
                 })
-                .Where(x => x.Score > 0)
-                .OrderByDescending(x => x.Score)
-                .Take(topK)
-                .Select(x => x.Entity)
+                .Where(item => item.Score > 0)
+                .OrderByDescending(item => item.Score)
+                .ThenByDescending(item => item.Entity.isDiscovered)
+                .Take(Mathf.Max(1, topK))
+                .Select(item => item.Entity)
                 .ToList();
-
-            return scored;
         }
 
-        private float CalculateRelevanceScore(KnowledgeEntity entity, string context)
-        {
-            float score = 0;
-
-            // Ãû³ÆÆ¥Åä
-            if (context.Contains(entity.name))
-                score += 10;
-
-            // ±êÇ©Æ¥Åä
-            foreach (var tag in entity.tags)
-            {
-                if (context.Contains(tag))
-                    score += 3;
-            }
-
-            // ÃèÊö¹Ø¼ü´ÊÆ¥Åä
-            var descWords = entity.description.ToCharArray();
-            int matchCount = context.Count(c => entity.description.Contains(c));
-            score += matchCount * 0.1f;
-
-            return score;
-        }
-
-        #endregion
-
-        #region ÖªÊ¶×¢ÈëÓëÌáÊ¾´Ê¹¹½¨
-
-        /// <summary>
-        /// ¹¹½¨ÖªÊ¶ÔöÇ¿µÄÉÏÏÂÎÄ£¨ÓÃÓÚ×¢ÈëLLMÌáÊ¾´Ê£©
-        /// </summary>
         public string BuildKnowledgeContext(string playerInput)
         {
             var relevantEntities = SemanticRetrieve(playerInput, 3);
-            if (relevantEntities.Count == 0) return "";
+            if (relevantEntities.Count == 0)
+                return string.Empty;
 
-            var sb = new StringBuilder();
-            sb.AppendLine("¡¾É½º£¾­ÖªÊ¶²Î¿¼¡¿");
+            var builder = new StringBuilder();
+            builder.AppendLine("ã€å±±æµ·ç»çŸ¥è¯†å‚è€ƒã€‘");
 
             foreach (var entity in relevantEntities)
             {
-                sb.AppendLine($"¡ô {entity.name}£¨{GetEntityTypeName(entity.entityType)}£©");
-                sb.AppendLine($"  {entity.description}");
-                sb.AppendLine($"  ¡ª¡ª¡¶{entity.source}¡·");
+                builder.AppendLine($"â—† {entity.name}ï¼ˆ{GetEntityTypeName(entity.entityType)}ï¼‰");
+                builder.AppendLine($"  {entity.description}");
+
+                var relationTexts = GetRelatedEntities(entity.id)
+                    .Take(2)
+                    .Select(item => GetRelationDisplayText(entity, item.entity, item.relation))
+                    .Where(text => !string.IsNullOrWhiteSpace(text))
+                    .ToList();
+
+                if (relationTexts.Count > 0)
+                    builder.AppendLine($"  å…³è”ï¼š{string.Join("ï¼›", relationTexts)}");
+
+                builder.AppendLine($"  â€”â€”ã€Š{entity.source}ã€‹");
             }
 
-            return sb.ToString();
+            return builder.ToString().TrimEnd();
         }
 
-        /// <summary>
-        /// ´ÓAI»Ø¸´ÖĞ³éÈ¡ÊµÌå²¢±ê¼Ç·¢ÏÖ
-        /// </summary>
         public void ExtractAndDiscoverFromText(string text)
         {
-            if (string.IsNullOrEmpty(text)) return;
+            if (string.IsNullOrWhiteSpace(text))
+                return;
 
             foreach (var entity in _entityDict.Values)
             {
-                if (text.Contains(entity.name))
+                if (!string.IsNullOrEmpty(entity.name) && text.Contains(entity.name, StringComparison.Ordinal))
                 {
                     DiscoverEntity(entity.id);
                 }
             }
         }
 
-        private string GetEntityTypeName(EntityType type)
-        {
-            return type switch
-            {
-                EntityType.Beast => "ÒìÊŞ",
-                EntityType.Herb => "²İÒ©",
-                EntityType.Location => "µØµã",
-                EntityType.Character => "ÈËÎï",
-                EntityType.Item => "ÎïÆ·",
-                EntityType.Skill => "¼¼ÄÜ",
-                _ => "Î´Öª"
-            };
-        }
-
-        #endregion
-
-        #region ´æµµÓë»Ö¸´
-
         public KnowledgeGraphSnapshot GetSnapshot()
         {
             return new KnowledgeGraphSnapshot
             {
-                entities = _entityDict.Values.ToList(),
-                relations = new List<KnowledgeRelation>(_relations),
+                entities = _entityDict.Values.Select(CloneEntity).ToList(),
+                relations = _relations.Select(CloneRelation).ToList(),
                 discoveredEntityIds = _discoveredIds.ToList()
             };
         }
 
         public void RestoreFromSnapshot(KnowledgeGraphSnapshot snapshot)
         {
-            if (snapshot == null) return;
+            ResetDiscoveredState();
 
-            // »Ö¸´·¢ÏÖ×´Ì¬
-            _discoveredIds.Clear();
-            foreach (var id in snapshot.discoveredEntityIds)
+            if (snapshot == null)
             {
-                _discoveredIds.Add(id);
-                if (_entityDict.ContainsKey(id))
-                    _entityDict[id].isDiscovered = true;
+                Debug.Log("[GraphRAG] å­˜æ¡£æœªåŒ…å«çŸ¥è¯†å›¾è°±å¿«ç…§ï¼Œå·²æŒ‰ç©ºå¿«ç…§æ¢å¤ã€‚");
+                return;
             }
 
-            Debug.Log($"[GraphRAG] ÒÑ»Ö¸´ÖªÊ¶Í¼Æ×: {_discoveredIds.Count} ¸öÒÑ·¢ÏÖ");
+            if (snapshot.entities != null)
+            {
+                foreach (var savedEntity in snapshot.entities)
+                {
+                    if (savedEntity == null || string.IsNullOrWhiteSpace(savedEntity.id))
+                        continue;
+
+                    if (_entityDict.TryGetValue(savedEntity.id, out var currentEntity))
+                    {
+                        currentEntity.description = savedEntity.description;
+                        currentEntity.source = savedEntity.source;
+                        currentEntity.tags = savedEntity.tags ?? new List<string>();
+                        currentEntity.properties = savedEntity.properties ?? new Dictionary<string, string>();
+                        currentEntity.discoveredAt = savedEntity.discoveredAt;
+                    }
+                    else
+                    {
+                        AddEntity(CloneEntity(savedEntity));
+                    }
+                }
+            }
+
+            if (snapshot.relations != null)
+            {
+                foreach (var relation in snapshot.relations)
+                {
+                    if (relation == null)
+                        continue;
+
+                    bool exists = _relations.Any(existing =>
+                        existing.fromId == relation.fromId &&
+                        existing.toId == relation.toId &&
+                        existing.relationType == relation.relationType);
+
+                    if (!exists)
+                        AddRelation(CloneRelation(relation));
+                }
+            }
+
+            IEnumerable<string> discoveredIds = snapshot.discoveredEntityIds ?? snapshot.entities?
+                .Where(entity => entity != null && entity.isDiscovered)
+                .Select(entity => entity.id)
+                .ToList();
+
+            if (discoveredIds != null)
+            {
+                foreach (var id in discoveredIds)
+                {
+                    if (!_entityDict.ContainsKey(id))
+                        continue;
+
+                    _discoveredIds.Add(id);
+                    _entityDict[id].isDiscovered = true;
+                    if (_entityDict[id].discoveredAt == 0)
+                        _entityDict[id].discoveredAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                }
+            }
+
+            Debug.Log($"[GraphRAG] å·²æ¢å¤çŸ¥è¯†å›¾è°±: {_discoveredIds.Count} ä¸ªå·²å‘ç°");
         }
 
-        #endregion
+        private void ClearLibrary()
+        {
+            _entityDict.Clear();
+            _relations.Clear();
+            _discoveredIds.Clear();
+            _typeIndex.Clear();
+            _relationIndex.Clear();
+        }
+
+        private void IndexRelation(KnowledgeRelation relation)
+        {
+            if (!_relationIndex.ContainsKey(relation.fromId))
+                _relationIndex[relation.fromId] = new List<KnowledgeRelation>();
+            _relationIndex[relation.fromId].Add(relation);
+
+            if (!_relationIndex.ContainsKey(relation.toId))
+                _relationIndex[relation.toId] = new List<KnowledgeRelation>();
+            _relationIndex[relation.toId].Add(relation);
+        }
+
+        private bool TryLoadKnowledgeFromJson()
+        {
+            var asset = shanHaiJingData != null ? shanHaiJingData : Resources.Load<TextAsset>(DefaultKnowledgeResourcePath);
+            if (asset == null || string.IsNullOrWhiteSpace(asset.text))
+            {
+                Debug.LogWarning("[GraphRAG] æœªæ‰¾åˆ°çŸ¥è¯† JSONï¼Œå›é€€åˆ°å†…ç½®çŸ¥è¯†åº“ã€‚");
+                return false;
+            }
+
+            try
+            {
+                var library = JsonUtility.FromJson<KnowledgeLibraryData>(asset.text);
+                if (library == null || library.entities == null || library.entities.Count == 0)
+                {
+                    Debug.LogWarning("[GraphRAG] çŸ¥è¯† JSON ä¸ºç©ºï¼Œå›é€€åˆ°å†…ç½®çŸ¥è¯†åº“ã€‚");
+                    return false;
+                }
+
+                foreach (var entityData in library.entities)
+                {
+                    var entity = new KnowledgeEntity(
+                        entityData.id,
+                        entityData.name,
+                        ParseEntityType(entityData.entityType),
+                        entityData.description,
+                        entityData.source)
+                    {
+                        tags = entityData.tags != null ? new List<string>(entityData.tags) : new List<string>()
+                    };
+                    AddEntity(entity);
+                }
+
+                if (library.relations != null)
+                {
+                    foreach (var relationData in library.relations)
+                    {
+                        AddRelation(new KnowledgeRelation(
+                            relationData.fromId,
+                            relationData.toId,
+                            ParseRelationType(relationData.relationType),
+                            relationData.description,
+                            relationData.weight <= 0 ? 1f : relationData.weight));
+                    }
+                }
+
+                Debug.Log($"[GraphRAG] å·²ä» JSON è½½å…¥çŸ¥è¯†åº“: {asset.name}");
+                return true;
+            }
+            catch (Exception exception)
+            {
+                Debug.LogError($"[GraphRAG] è§£æçŸ¥è¯† JSON å¤±è´¥: {exception.Message}");
+                return false;
+            }
+        }
+
+        private void SeedFallbackKnowledge()
+        {
+            AddEntity(new KnowledgeEntity("loc_zhaoyao", "æ‹›æ‘‡å±±", EntityType.Location,
+                "æ‹›æ‘‡ä¹‹å±±å¤šæ¡‚æœ¨ä¸çŸ¿ç‰ï¼Œå±±å²šç»ˆæ—¥ä¸æ•£ï¼Œæ™¨é›¾æ²¿ç€çŸ³è„Šä¸æ¾æ ¹æ¸¸èµ°ã€‚",
+                "å±±æµ·ç»Â·å—å±±ç»")
+            { tags = new List<string> { "å—å±±ç»", "é›¾", "çµå±±" } });
+
+            AddEntity(new KnowledgeEntity("herb_zhuyu", "ç¥ä½™", EntityType.Herb,
+                "æ‹›æ‘‡ä¹‹å±±æœ‰è‰ç„‰ï¼Œå…¶çŠ¶å¦‚éŸ­è€Œé’åï¼Œå…¶åæ›°ç¥ä½™ï¼Œé£Ÿä¹‹ä¸é¥¥ã€‚",
+                "å±±æµ·ç»Â·å—å±±ç»")
+            { tags = new List<string> { "è¾Ÿè°·", "æœè…¹", "è‰è¯" } });
+
+            AddEntity(new KnowledgeEntity("herb_migu", "è¿·è°·", EntityType.Herb,
+                "æ‹›æ‘‡ä¹‹å±±æœ‰æœ¨ç„‰ï¼Œå…¶çŠ¶å¦‚æ¦–è€Œé»‘ç†ï¼Œå…¶åå››ç…§ï¼Œå…¶åæ›°è¿·è°·ï¼Œä½©ä¹‹ä¸è¿·ã€‚",
+                "å±±æµ·ç»Â·å—å±±ç»")
+            { tags = new List<string> { "è¾¨è·¯", "é¿é›¾", "çµæœ¨" } });
+
+            AddEntity(new KnowledgeEntity("beast_jiuwei", "ä¹å°¾ç‹", EntityType.Beast,
+                "é’ä¸˜ä¹‹å±±æœ‰å…½ç„‰ï¼Œå…¶çŠ¶å¦‚ç‹è€Œä¹å°¾ï¼Œå…¶éŸ³å¦‚å©´å„¿ï¼Œèƒ½é£Ÿäººï¼Œé£Ÿè€…ä¸è›Šã€‚",
+                "å±±æµ·ç»Â·å—å±±ç»")
+            { tags = new List<string> { "ç¥å…½", "é’ä¸˜", "ä¹å°¾" } });
+
+            AddEntity(new KnowledgeEntity("beast_bifang", "æ¯•æ–¹", EntityType.Beast,
+                "ç« èªä¹‹å±±æœ‰é¸Ÿç„‰ï¼Œå…¶çŠ¶å¦‚é¹¤ï¼Œä¸€è¶³ï¼Œèµ¤æ–‡é’è´¨è€Œç™½å–™ï¼Œåæ›°æ¯•æ–¹ï¼Œè§åˆ™å…¶é‚‘æœ‰è®¹ç«ã€‚",
+                "å±±æµ·ç»Â·è¥¿å±±ç»")
+            { tags = new List<string> { "ç¥é¸Ÿ", "ç«", "ä¸€è¶³" } });
+
+            AddEntity(new KnowledgeEntity("loc_qingqiu", "é’ä¸˜", EntityType.Location,
+                "åˆä¸œä¸‰ç™¾é‡Œï¼Œæ›°é’ä¸˜ä¹‹å±±ï¼Œå…¶é˜³å¤šç‰ï¼Œå…¶é˜´å¤šé’é›˜ã€‚",
+                "å±±æµ·ç»Â·å—å±±ç»")
+            { tags = new List<string> { "ä»™å±±", "ç‰çŸ³" } });
+
+            AddEntity(new KnowledgeEntity("loc_zhange", "ç« èªä¹‹å±±", EntityType.Location,
+                "ç« èªä¹‹å±±å¤šæ€ªé¸Ÿå¼‚ç«ï¼Œå±±é£ç‡¥çƒˆï¼Œå¸¸æœ‰èµ¤çº¹æµç„°å‡ºæ²¡ã€‚",
+                "å±±æµ·ç»Â·è¥¿å±±ç»")
+            { tags = new List<string> { "ç«å…†", "å¼‚é¸Ÿ" } });
+
+            AddRelation(new KnowledgeRelation("herb_zhuyu", "loc_zhaoyao", RelationType.GrowsIn, "ç¥ä½™ç”Ÿäºæ‹›æ‘‡å±±"));
+            AddRelation(new KnowledgeRelation("herb_migu", "loc_zhaoyao", RelationType.GrowsIn, "è¿·è°·ç”Ÿäºæ‹›æ‘‡å±±"));
+            AddRelation(new KnowledgeRelation("beast_jiuwei", "loc_qingqiu", RelationType.FoundIn, "ä¹å°¾ç‹å‡ºæ²¡äºé’ä¸˜"));
+            AddRelation(new KnowledgeRelation("beast_bifang", "loc_zhange", RelationType.FoundIn, "æ¯•æ–¹å‡ºæ²¡äºç« èªä¹‹å±±"));
+            AddRelation(new KnowledgeRelation("herb_migu", "loc_zhaoyao", RelationType.RequiredFor, "è¿·è°·å¯å¸®åŠ©æ—…è€…è¾¨æ¸…å±±ä¸­è¿·é€”"));
+        }
+
+        private float CalculateRelevanceScore(KnowledgeEntity entity, string context)
+        {
+            float score = 0f;
+            if (entity == null || string.IsNullOrWhiteSpace(context))
+                return score;
+
+            if (!string.IsNullOrEmpty(entity.name) && context.IndexOf(entity.name, StringComparison.OrdinalIgnoreCase) >= 0)
+                score += 10f;
+
+            if (entity.tags != null)
+            {
+                foreach (var tag in entity.tags)
+                {
+                    if (!string.IsNullOrWhiteSpace(tag) && context.IndexOf(tag, StringComparison.OrdinalIgnoreCase) >= 0)
+                        score += 3f;
+                }
+            }
+
+            if (!string.IsNullOrEmpty(entity.description))
+            {
+                foreach (char character in context)
+                {
+                    if (entity.description.IndexOf(character) >= 0)
+                        score += 0.08f;
+                }
+            }
+
+            if (entity.isDiscovered)
+                score += 0.5f;
+
+            return score;
+        }
+
+        private static KnowledgeEntity CloneEntity(KnowledgeEntity source)
+        {
+            if (source == null)
+                return null;
+
+            return new KnowledgeEntity(source.id, source.name, source.entityType, source.description, source.source)
+            {
+                tags = source.tags != null ? new List<string>(source.tags) : new List<string>(),
+                properties = source.properties != null ? new Dictionary<string, string>(source.properties) : new Dictionary<string, string>(),
+                isDiscovered = source.isDiscovered,
+                discoveredAt = source.discoveredAt
+            };
+        }
+
+        private static KnowledgeRelation CloneRelation(KnowledgeRelation source)
+        {
+            if (source == null)
+                return null;
+
+            return new KnowledgeRelation(source.fromId, source.toId, source.relationType, source.description, source.weight);
+        }
+
+        private static EntityType ParseEntityType(string rawType)
+        {
+            return Enum.TryParse(rawType, true, out EntityType entityType)
+                ? entityType
+                : EntityType.Item;
+        }
+
+        private static RelationType ParseRelationType(string rawType)
+        {
+            return Enum.TryParse(rawType, true, out RelationType relationType)
+                ? relationType
+                : RelationType.RequiredFor;
+        }
+
+        private string GetEntityTypeName(EntityType type)
+        {
+            return type switch
+            {
+                EntityType.Beast => "å¼‚å…½",
+                EntityType.Herb => "è‰è¯",
+                EntityType.Location => "åœ°ç‚¹",
+                EntityType.Character => "äººç‰©",
+                EntityType.Item => "ç‰©å“",
+                EntityType.Skill => "æŠ€èƒ½",
+                _ => "æœªçŸ¥"
+            };
+        }
+
+        private string GetRelationTypeName(RelationType type)
+        {
+            return type switch
+            {
+                RelationType.FoundIn => "å‡ºæ²¡äº",
+                RelationType.GrowsIn => "ç”Ÿé•¿äº",
+                RelationType.Drops => "å¯æ‰è½",
+                RelationType.CounteredBy => "å¯è¢«å…‹åˆ¶",
+                RelationType.Cures => "å¯æ²»ç–—",
+                RelationType.HostileTo => "æ•Œå¯¹",
+                RelationType.SymbioticWith => "å…±ç”Ÿäº",
+                RelationType.RequiredFor => "å¸¸ç”¨äº",
+                _ => "å…³è”"
+            };
+        }
+
+        #pragma warning disable CS0649
+        [Serializable]
+        private sealed class KnowledgeLibraryData
+        {
+            public List<KnowledgeEntityData> entities = new List<KnowledgeEntityData>();
+            public List<KnowledgeRelationData> relations = new List<KnowledgeRelationData>();
+        }
+
+        [Serializable]
+        private sealed class KnowledgeEntityData
+        {
+            public string id;
+            public string name;
+            public string entityType;
+            public string description;
+            public string source;
+            public List<string> tags = new List<string>();
+        }
+
+        [Serializable]
+        private sealed class KnowledgeRelationData
+        {
+            public string fromId;
+            public string toId;
+            public string relationType;
+            public string description;
+            public float weight = 1f;
+        }
+        #pragma warning restore CS0649
     }
 }

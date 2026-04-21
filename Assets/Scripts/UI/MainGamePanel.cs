@@ -2,8 +2,12 @@ using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.Events;
 using StateData.Role;
+using StateData.Environment;
+using Logic.Memory;
 using TMPro;
 using System.Collections;
+using System.Linq;
+using System.Text;
 
 public class MainGamePanel : BasePanel
 {
@@ -18,7 +22,7 @@ public class MainGamePanel : BasePanel
     public Button historyButton;
     public Button hintButton;
     public Button buttonSet;
-    public Button knowledgeGraphButton;  // ĞÂÔö£ºÖªÊ¶Í¼Æ×°´Å¥
+    public Button knowledgeGraphButton;  // æ–°å¢ï¼šçŸ¥è¯†å›¾è°±æŒ‰é’®
 
     public event UnityAction<string> OnPlayerInput;
 
@@ -41,14 +45,16 @@ public class MainGamePanel : BasePanel
         if (buttonSet != null)
             buttonSet.onClick.AddListener(OnSetClick);
 
-        // ĞÂÔö£º°ó¶¨ÖªÊ¶Í¼Æ×°´Å¥
+        // æ–°å¢ï¼šç»‘å®šçŸ¥è¯†å›¾è°±æŒ‰é’®
         if (knowledgeGraphButton != null)
             knowledgeGraphButton.onClick.AddListener(OnKnowledgeGraphClick);
+
+        ApplyBranding();
     }
 
     private void OnHistoryClick()
     {
-        // ²¥·Å´ò¿ªÃæ°åµÄÌØÊâÒôĞ§
+        // æ’­æ”¾æ‰“å¼€é¢æ¿çš„ç‰¹æ®ŠéŸ³æ•ˆ
         if (AudioMgr.Instance != null)
             AudioMgr.Instance.PlayPanelOpenSfx();
 
@@ -57,7 +63,7 @@ public class MainGamePanel : BasePanel
 
     private void OnHintClick()
     {
-        // ²¥·Å´ò¿ªÃæ°åµÄÌØÊâÒôĞ§
+        // æ’­æ”¾æ‰“å¼€é¢æ¿çš„ç‰¹æ®ŠéŸ³æ•ˆ
         if (AudioMgr.Instance != null)
             AudioMgr.Instance.PlayPanelOpenSfx();
 
@@ -65,7 +71,7 @@ public class MainGamePanel : BasePanel
     }
 
     /// <summary>
-    /// ĞÂÔö£º´ò¿ªÖªÊ¶Í¼Æ×Ãæ°å
+    /// æ–°å¢ï¼šæ‰“å¼€çŸ¥è¯†å›¾è°±é¢æ¿
     /// </summary>
     private void OnKnowledgeGraphClick()
     {
@@ -80,7 +86,7 @@ public class MainGamePanel : BasePanel
         if (inputField == null) return;
         if (string.IsNullOrWhiteSpace(inputField.text)) return;
 
-        // ²¥·ÅÆÕÍ¨µã»÷ÒôĞ§
+        // æ’­æ”¾æ™®é€šç‚¹å‡»éŸ³æ•ˆ
         if (AudioMgr.Instance != null)
             AudioMgr.Instance.PlayClickSfx();
 
@@ -91,7 +97,7 @@ public class MainGamePanel : BasePanel
 
     private void OnSetClick()
     {
-        // ²¥·Å´ò¿ªÃæ°åµÄÌØÊâÒôĞ§
+        // æ’­æ”¾æ‰“å¼€é¢æ¿çš„ç‰¹æ®ŠéŸ³æ•ˆ
         if (AudioMgr.Instance != null)
             AudioMgr.Instance.PlayPanelOpenSfx();
 
@@ -100,15 +106,15 @@ public class MainGamePanel : BasePanel
             panel.SetOpenFromGame(true);
     }
 
-    // ¡¾ÓÅ»¯¡¿Ìí¼Ó¾²Ì¬ÎÄ±¾£¨Íæ¼Ò»òÏµÍ³ÌáÊ¾£©
+    // ã€ä¼˜åŒ–ã€‘æ·»åŠ é™æ€æ–‡æœ¬ï¼ˆç©å®¶æˆ–ç³»ç»Ÿæç¤ºï¼‰
     public void AppendText(string text, bool isPlayer)
     {
-        string color = isPlayer ? "#4E342E" : "#000000"; // Íæ¼ÒÉî×ØÉ«£¬ÏµÍ³ºÚÉ«
+        string color = isPlayer ? "#4E342E" : "#000000"; // ç©å®¶æ·±æ£•è‰²ï¼Œç³»ç»Ÿé»‘è‰²
 
-        // Âß¼­ÓÅ»¯£ºÈç¹ûµ±Ç°ÊÇ¿ÕµÄ£¬¾Í²»¼Ó»»ĞĞ£»·ñÔòÔÚÇ°Ãæ¼ÓÒ»¸ö»»ĞĞ£¬¶ø²»ÊÇÇ°ºó¶¼¼Ó
+        // é€»è¾‘ä¼˜åŒ–ï¼šå¦‚æœå½“å‰æ˜¯ç©ºçš„ï¼Œå°±ä¸åŠ æ¢è¡Œï¼›å¦åˆ™åœ¨å‰é¢åŠ ä¸€ä¸ªæ¢è¡Œï¼Œè€Œä¸æ˜¯å‰åéƒ½åŠ 
         string prefix = string.IsNullOrEmpty(currentStoryContent) ? "" : "\n";
 
-        // ×éºÏÎÄ±¾£º¼Ó´ÖÍæ¼Ò·¢ÑÔ£¬Ôö¼ÓÇø·Ö¶È
+        // ç»„åˆæ–‡æœ¬ï¼šåŠ ç²—ç©å®¶å‘è¨€ï¼Œå¢åŠ åŒºåˆ†åº¦
         if (isPlayer)
         {
             currentStoryContent += $"{prefix}<color={color}><b> {text}</b></color>\n";
@@ -121,22 +127,22 @@ public class MainGamePanel : BasePanel
         UpdateUIText();
     }
 
-    // ¡¾Á÷Ê½¡¿×·¼Ó Token
+    // ã€æµå¼ã€‘è¿½åŠ  Token
     public void AppendStreamToken(string token)
     {
         currentStoryContent += token;
         UpdateUIText();
     }
 
-    // ¡¾Á÷Ê½¡¿½áÊø
+    // ã€æµå¼ã€‘ç»“æŸ
     public void FinishStream()
     {
-        // Á÷Ê½½áÊøºó£¬¶îÍâ×·¼ÓÒ»¸ö»»ĞĞ£¬ÎªÏÂÒ»ÂÖ¶Ô»°Áô³ö¿Õ¼ä
+        // æµå¼ç»“æŸåï¼Œé¢å¤–è¿½åŠ ä¸€ä¸ªæ¢è¡Œï¼Œä¸ºä¸‹ä¸€è½®å¯¹è¯ç•™å‡ºç©ºé—´
         currentStoryContent += "\n";
         UpdateUIText();
     }
 
-    // ¡¾ÇåÏ´¡¿ÒÆ³ı CMD Ö¸Áî
+    // ã€æ¸…æ´—ã€‘ç§»é™¤ CMD æŒ‡ä»¤
     public void RemoveCmdTagsFromUI()
     {
         if (storyText == null) return;
@@ -153,13 +159,31 @@ public class MainGamePanel : BasePanel
 
     public void UpdateStateDisplay(RoleState state)
     {
+        UpdateStateDisplay(state, GameLoop.Instance != null ? GameLoop.Instance.CurrentEnvironment : null);
+    }
+
+    public void UpdateStateDisplay(RoleState state, EnvironmentState environmentState)
+    {
         if (statusText == null || state == null) return;
 
-        // Ê¹ÓÃ¸»ÎÄ±¾ÈÃÊıÖµ¸üÏÔÑÛ
+        environmentState ??= EnvironmentState.GetDefault();
+        environmentState.EnsureCollections();
+
+        string tagPreview = environmentState.dynamicTags != null && environmentState.dynamicTags.Count > 0
+            ? string.Join(" / ", environmentState.dynamicTags.Take(4))
+            : "æš‚æ— ";
+        string objectiveText = string.IsNullOrWhiteSpace(environmentState.currentObjective)
+            ? "è‡ªç”±æ¢ç´¢"
+            : environmentState.currentObjective;
+
         statusText.text =
-            $"½¡¿µ¶È: <color=#FF5555>{state.attributes.currentHealth}/{state.attributes.maxHealth}</color> | " +
-            $"ÁéÁ¦: <color=#55AAFF>{state.attributes.currentMana}</color> | " +
-            $"»·¾³: <color=#FFAA00>¡¾ÕĞÒ¡É½¡¿</color>";
+            $"å¥åº·åº¦: <color=#FF5555>{state.attributes.currentHealth}/{state.attributes.maxHealth}</color> | " +
+            $"çµåŠ›: <color=#55AAFF>{state.attributes.currentMana}/{state.attributes.maxMana}</color> | " +
+            $"å¢ƒåœ°: <color=#FFAA00>ã€{environmentState.locationName}ã€‘</color>\n" +
+            $"å¤©å€™: <color=#9EC8FF>{GetDisplayWeatherText(environmentState.weather)}</color> | " +
+            $"æ—¶è¾°: <color=#B6E0FE>{GetDisplayTimeText(environmentState.timeOfDay)}</color>\n" +
+            $"ç›®æ ‡: <color=#D9B16A>{objectiveText}</color>\n" +
+            $"æ ‡ç­¾: <color=#8E6B3F>{tagPreview}</color>";
     }
 
     public void ShowLoading(bool isLoading)
@@ -169,7 +193,7 @@ public class MainGamePanel : BasePanel
 
         if (historyButton != null) historyButton.interactable = !isLoading;
         if (hintButton != null) hintButton.interactable = !isLoading;
-        if (knowledgeGraphButton != null) knowledgeGraphButton.interactable = !isLoading;  // ĞÂÔö
+        if (knowledgeGraphButton != null) knowledgeGraphButton.interactable = !isLoading;  // æ–°å¢
     }
 
     private void UpdateUIText()
@@ -178,8 +202,8 @@ public class MainGamePanel : BasePanel
         {
             storyText.text = currentStoryContent;
 
-            // ¹Ø¼ü£º²»ÒªÖ±½Óµ÷ÓÃ ScrollToBottom£¬ÒòÎª TMP µÄÍø¸ñ¸üĞÂÊÇÖÍºóµÄ
-            // ±ØĞë¿ªÆôĞ­³ÌµÈ´ıÕâÒ»Ö¡äÖÈ¾Íê±ÏÔÙ¹ö£¬·ñÔò¹ö²»µ½×îµ×ÏÂ
+            // å…³é”®ï¼šä¸è¦ç›´æ¥è°ƒç”¨ ScrollToBottomï¼Œå› ä¸º TMP çš„ç½‘æ ¼æ›´æ–°æ˜¯æ»åçš„
+            // å¿…é¡»å¼€å¯åç¨‹ç­‰å¾…è¿™ä¸€å¸§æ¸²æŸ“å®Œæ¯•å†æ»šï¼Œå¦åˆ™æ»šä¸åˆ°æœ€åº•ä¸‹
             if (gameObject.activeInHierarchy)
             {
                 StartCoroutine(ScrollToBottomCoroutine());
@@ -187,14 +211,124 @@ public class MainGamePanel : BasePanel
         }
     }
 
+    public void ClearStory()
+    {
+        currentStoryContent = string.Empty;
+        UpdateUIText();
+    }
+
+    public void ReplaceLastStreamContent(string original, string replacement)
+    {
+        if (string.IsNullOrEmpty(original) || replacement == null || string.IsNullOrEmpty(currentStoryContent))
+            return;
+
+        int index = currentStoryContent.LastIndexOf(original, System.StringComparison.Ordinal);
+        if (index < 0)
+            return;
+
+        currentStoryContent =
+            currentStoryContent.Substring(0, index) +
+            replacement +
+            currentStoryContent.Substring(index + original.Length);
+
+        UpdateUIText();
+    }
+
+    public void RestoreStoryFromMemory(MemorySnapshot snapshot, string systemNotice = null)
+    {
+        var builder = new StringBuilder();
+
+        if (snapshot?.longTermMemories != null && snapshot.longTermMemories.Count > 0)
+        {
+            builder.AppendLine("<color=#B79253>ã€å·²æ¢å¤è®°å¿†æ‘˜è¦ã€‘</color>");
+            foreach (var memory in snapshot.longTermMemories)
+            {
+                builder.AppendLine($"<color=#7A5F2A>{memory.summary}</color>");
+            }
+            builder.AppendLine();
+        }
+
+        if (snapshot?.shortTermMemory != null)
+        {
+            foreach (var entry in snapshot.shortTermMemory)
+            {
+                if (entry == null || string.IsNullOrWhiteSpace(entry.content))
+                    continue;
+
+                string prefix = builder.Length == 0 ? "" : "\n";
+                if (entry.role == "user")
+                    builder.Append($"{prefix}<color=#4E342E><b> {entry.content}</b></color>\n");
+                else
+                    builder.Append($"{prefix}<color=#000000>{entry.content}</color>");
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(systemNotice))
+        {
+            string prefix = builder.Length == 0 ? "" : "\n";
+            builder.Append($"{prefix}<color=#C58F2B>{systemNotice}</color>");
+        }
+
+        currentStoryContent = builder.ToString();
+        UpdateUIText();
+    }
+
+    public void ApplyBranding()
+    {
+        SetButtonLabel(historyButton, "è®°å½•");
+        SetButtonLabel(hintButton, "æ¨è");
+        SetButtonLabel(knowledgeGraphButton, "çŸ¥è¯†å›¾è°±");
+        SetButtonLabel(buttonSet, "è®¾ç½®");
+        SetButtonLabel(sendButton, "é€å‡ºè¡ŒåŠ¨");
+
+        if (inputField != null && inputField.placeholder is TMP_Text placeholder)
+        {
+            placeholder.text = "è¾“å…¥è¡ŒåŠ¨ï¼Œä¾‹å¦‚ï¼šè§‚å¯Ÿæ‹›æ‘‡å±±é›¾ä¸­çš„è‰æœ¨";
+        }
+    }
+
+    private static void SetButtonLabel(Button button, string text)
+    {
+        if (button == null || string.IsNullOrWhiteSpace(text))
+            return;
+
+        var label = button.GetComponentInChildren<TMP_Text>(true);
+        if (label != null)
+            label.text = text;
+    }
+
+    private static string GetDisplayTimeText(string rawTime)
+    {
+        return rawTime switch
+        {
+            "Dawn" => "æ¸…æ™¨",
+            "Day" => "ç™½æ˜¼",
+            "Dusk" => "å‚æ™š",
+            "Night" => "å¤œæ™š",
+            _ => string.IsNullOrWhiteSpace(rawTime) ? "æœªçŸ¥" : rawTime
+        };
+    }
+
+    private static string GetDisplayWeatherText(string rawWeather)
+    {
+        return rawWeather switch
+        {
+            "Clear" => "æ™´æœ—",
+            "Foggy" => "è¿·é›¾",
+            "Rainy" => "é›¨å¹•",
+            "Stormy" => "ç‹‚é£",
+            _ => string.IsNullOrWhiteSpace(rawWeather) ? "æœªçŸ¥" : rawWeather
+        };
+    }
+
     private IEnumerator ScrollToBottomCoroutine()
     {
-        // µÈ´ıµ±Ç°Ö¡µÄ UI ²¼¾ÖÖØ½¨Íê³É
+        // ç­‰å¾…å½“å‰å¸§çš„ UI å¸ƒå±€é‡å»ºå®Œæˆ
         yield return new WaitForEndOfFrame();
 
         if (scrollRect != null)
         {
-            // 0 ´ú±íµ×²¿£¬1 ´ú±í¶¥²¿
+            // 0 ä»£è¡¨åº•éƒ¨ï¼Œ1 ä»£è¡¨é¡¶éƒ¨
             scrollRect.verticalNormalizedPosition = 0f;
         }
     }

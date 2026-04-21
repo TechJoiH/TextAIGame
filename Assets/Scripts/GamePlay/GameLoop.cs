@@ -1,34 +1,38 @@
+using System;
 using System.Text;
-using UnityEngine;
-using StateData.Role;
-using StateData.Environment;
+using Data.KnowledgeGraph;
+using Logic.GraphRAG;
 using Logic.Intent;
 using Logic.Memory;
-using Logic.GraphRAG;
-using Data.KnowledgeGraph;
+using StateData.Environment;
+using StateData.Role;
+using UnityEngine;
 
 public class GameLoop : MonoBehaviour
 {
+    private const string ScenarioResourcePath = "Configs/ZhaoYaoShanScenario";
+
     public static GameLoop Instance { get; private set; }
 
     public MainGamePanel gamePanel;
 
     private RoleState playerState;
     private EnvironmentState envState;
-
-    public RoleState CurrentState => playerState;
-    public EnvironmentState CurrentEnvironment => envState;
-
+    private ScenarioConfig activeScenario;
     private bool _gameInited;
-    
-    // ÊÇ·ñÆôÓÃ LLM ºó±¸ÒâÍ¼Ê¶±ğ£¨¿ÉÔÚÉèÖÃÖĞµ÷Õû£©
+
+    [Header("å¯é€‰é…ç½®èµ„æº")]
+    [SerializeField] private TextAsset scenarioConfigJson;
     [SerializeField] private bool enableLLMIntentFallback = true;
 
-    // ÒôÆµÉèÖÃµÄ PlayerPrefs ¼ü
     private const string PrefMusicOn = "SET_MUSIC_ON";
     private const string PrefSoundOn = "SET_SOUND_ON";
     private const string PrefMusicVol = "SET_MUSIC_VOL";
     private const string PrefSoundVol = "SET_SOUND_VOL";
+
+    public RoleState CurrentState => playerState;
+    public EnvironmentState CurrentEnvironment => envState;
+    public ScenarioConfig CurrentScenario => activeScenario;
 
     private void Awake()
     {
@@ -37,7 +41,6 @@ public class GameLoop : MonoBehaviour
 
     private void Start()
     {
-        // ÏÈ³õÊ¼»¯ÒôÆµÉèÖÃ£¬ÔÙ²¥·ÅBGM
         InitAudioSettings();
 
         if (AudioMgr.Instance != null)
@@ -46,9 +49,12 @@ public class GameLoop : MonoBehaviour
         UIMgr.Instance.ShowPanel<BeginPanel>();
     }
 
-    /// <summary>
-    /// ´Ó PlayerPrefs ¼ÓÔØ²¢Ó¦ÓÃÒôÆµÉèÖÃ
-    /// </summary>
+    private void OnDestroy()
+    {
+        DetachGamePanelCallbacks();
+        EventCenter.Instance.RemoveListener<KnowledgeEntity>("OnKnowledgeDiscovered", OnEntityDiscovered);
+    }
+
     private void InitAudioSettings()
     {
         bool musicOn = PlayerPrefs.GetInt(PrefMusicOn, 1) == 1;
@@ -57,183 +63,217 @@ public class GameLoop : MonoBehaviour
         float soundVol = PlayerPrefs.GetFloat(PrefSoundVol, 1f);
 
         if (AudioMgr.Instance != null)
-        {
             AudioMgr.Instance.InitData(musicOn, soundOn, musicVol, soundVol);
-        }
     }
 
     public void StartNewGame()
     {
-        if (_gameInited) return;
-        _gameInited = true;
+        if (_gameInited)
+            return;
 
+        _gameInited = true;
         MemoryManager.Instance.ClearAll();
+
+        if (GraphRAGManager.Instance.TotalCount == 0)
+            GraphRAGManager.Instance.InitializeKnowledgeLibrary();
+
+        IntentRecognizer.Instance.ClearCache();
         InitGame();
     }
 
     public void ReturnToBegin()
     {
-        if (gamePanel != null)
-            gamePanel.OnPlayerInput -= HandlePlayerInput;
+        DetachGamePanelCallbacks();
+        EventCenter.Instance.RemoveListener<KnowledgeEntity>("OnKnowledgeDiscovered", OnEntityDiscovered);
 
         gamePanel = null;
         playerState = null;
         envState = null;
+        activeScenario = null;
         _gameInited = false;
+    }
+
+    public void LoadGame(
+        RoleState newState,
+        EnvironmentState newEnvState = null,
+        MemorySnapshot memorySnapshot = null,
+        KnowledgeGraphSnapshot knowledgeGraphSnapshot = null)
+    {
+        if (newState == null)
+            return;
+
+        _gameInited = true;
+        activeScenario ??= LoadScenarioConfig();
+        playerState = newState;
+        envState = newEnvState ?? LoadEnvironmentState(activeScenario);
+        envState?.EnsureCollections();
+
+        if (memorySnapshot != null)
+            MemoryManager.Instance.RestoreFromSnapshot(memorySnapshot);
+        else
+            MemoryManager.Instance.ClearAll();
+
+        GraphRAGManager.Instance.RestoreFromSnapshot(knowledgeGraphSnapshot);
+
+        EnsureGamePanelReady();
+        gamePanel.UpdateStateDisplay(playerState, envState);
+        gamePanel.RestoreStoryFromMemory(memorySnapshot, "ã€ç³»ç»Ÿã€‘å·²æ¢å¤è‡³è¯¥å›åˆçš„è§’è‰²ã€ç¯å¢ƒã€è®°å¿†ä¸çŸ¥è¯†å›¾è°±çŠ¶æ€ã€‚");
     }
 
     private void InitGame()
     {
-        // ³õÊ¼»¯½ÇÉ«×´Ì¬
-        playerState = new RoleState();
-        playerState.identity.name = "ÁÖÔ¨";
-        playerState.attributes.level = 1;
-        playerState.attributes.currentHealth = 80;
-        playerState.attributes.maxHealth = 100;
-        playerState.attributes.currentMana = 50;
-        playerState.attributes.maxMana = 50;
-        playerState.attributes.strength = 10;
-        playerState.attributes.agility = 8;
-        playerState.attributes.intelligence = 12;
-        playerState.attributes.expToNextLevel = 100;
-        playerState.cultivation.cultivationStage = 1;
-        playerState.equipment.inventory = new System.Collections.Generic.List<string> { "ÖÎÁÆÒ©Ë®", "»ğÕÛ" };
-        playerState.equipment.equippedSkills = new System.Collections.Generic.List<string> { "»ğÇòÊõ", "Óù·ç¾÷" };
+        activeScenario = LoadScenarioConfig();
+        playerState = activeScenario.BuildRoleState();
+        envState = LoadEnvironmentState(activeScenario);
+        envState?.EnsureCollections();
 
-        // ³õÊ¼»¯»·¾³×´Ì¬
-        envState = new EnvironmentState
+        GraphRAGManager.Instance.ResetDiscoveredState();
+        if (activeScenario.initialDiscoveredEntityIds != null)
         {
-            locationId = "weishan_entrance",
-            locationName = "Î£Ò¡É½¡¤É½½Å",
-            biome = "É½Âö",
-            weather = "Foggy",
-            timeOfDay = "Dawn",
-            narrativeHint = "³¿ÎíçÔÈÆ£¬¹ÅËÉ²Ô´ä",
-            isWet = false,
-            isDark = false,
-            isFoggy = true,
-            isWindy = false
-        };
+            foreach (var entityId in activeScenario.initialDiscoveredEntityIds)
+                GraphRAGManager.Instance.DiscoverEntity(entityId);
+        }
 
+        EnsureGamePanelReady();
+        gamePanel.ClearStory();
+        gamePanel.UpdateStateDisplay(playerState, envState);
+        gamePanel.AppendText(activeScenario.openingNarration, false);
+        if (!string.IsNullOrWhiteSpace(activeScenario.openingNotice))
+            gamePanel.AppendText($"<color=#C58F2B>ã€æ¼”ç¤ºç›®æ ‡ã€‘{activeScenario.openingNotice}</color>", false);
+
+        MemoryManager.Instance.AddAssistantMessage(activeScenario.openingNarration);
+        if (!string.IsNullOrWhiteSpace(activeScenario.openingNotice))
+            MemoryManager.Instance.AddAssistantMessage(activeScenario.openingNotice);
+    }
+
+    private void EnsureGamePanelReady()
+    {
         gamePanel = UIMgr.Instance.ShowPanel<MainGamePanel>();
-        if (gamePanel == null) return;
+        if (gamePanel == null)
+            return;
 
         gamePanel.Init();
-        gamePanel.UpdateStateDisplay(playerState);
+        gamePanel.ApplyBranding();
+
         gamePanel.OnPlayerInput -= HandlePlayerInput;
         gamePanel.OnPlayerInput += HandlePlayerInput;
-        
-        string openingText = "Äã»º»ºÕöÑÛ¡£ËÄÖÜÊÇÎ£Ò¡É½µÄ¶ÏÑÂ²Ğ±Ú£¬ÎíÆøÅ¨³íÈçÈé£¬¹üĞ®×Å¸¯Ğà²İÄ¾µÄÆøÏ¢...";
-        gamePanel.AppendText(openingText, false);
-        
-        MemoryManager.Instance.AddAssistantMessage(openingText);
 
-        // Í¨¹ıÊµÌåID½âËøµ¥¸öÊµÌå
-        GraphRAGManager.Instance.DiscoverEntity("beast_jiuwei");   // ½âËø¾ÅÎ²ºü
-        GraphRAGManager.Instance.DiscoverEntity("beast_bifang");   // ½âËø±Ï·½
-        GraphRAGManager.Instance.DiscoverEntity("herb_zhucao");    // ½âËø×£²İ
-        GraphRAGManager.Instance.DiscoverEntity("loc_qingqiu");    // ½âËøÇàÇğ
-
-        // ÔÚ MainGamePanel »òÆäËûµØ·½¼àÌı
+        EventCenter.Instance.RemoveListener<KnowledgeEntity>("OnKnowledgeDiscovered", OnEntityDiscovered);
         EventCenter.Instance.AddListener<KnowledgeEntity>("OnKnowledgeDiscovered", OnEntityDiscovered);
+    }
+
+    private void DetachGamePanelCallbacks()
+    {
+        if (gamePanel != null)
+            gamePanel.OnPlayerInput -= HandlePlayerInput;
+    }
+
+    private ScenarioConfig LoadScenarioConfig()
+    {
+        ScenarioConfig scenario = null;
+        TextAsset asset = scenarioConfigJson != null ? scenarioConfigJson : Resources.Load<TextAsset>(ScenarioResourcePath);
+
+        if (asset != null && !string.IsNullOrWhiteSpace(asset.text))
+        {
+            try
+            {
+                scenario = JsonUtility.FromJson<ScenarioConfig>(asset.text);
+            }
+            catch (Exception exception)
+            {
+                Debug.LogError($"[GameLoop] è§£æ ScenarioConfig å¤±è´¥: {exception.Message}");
+            }
+        }
+
+        scenario ??= ScenarioConfig.GetDefault();
+        scenario.EnsureDefaults();
+        return scenario;
+    }
+
+    private EnvironmentState LoadEnvironmentState(ScenarioConfig scenario)
+    {
+        string resourcePath = scenario != null ? scenario.environmentResourcePath : null;
+        EnvironmentData data = !string.IsNullOrWhiteSpace(resourcePath)
+            ? Resources.Load<EnvironmentData>(resourcePath)
+            : null;
+
+        if (data == null)
+        {
+            Debug.LogWarning($"[GameLoop] æœªæ‰¾åˆ°ç¯å¢ƒèµ„æº {resourcePath}ï¼Œä½¿ç”¨é»˜è®¤ç¯å¢ƒçŠ¶æ€ã€‚");
+            return EnvironmentState.GetDefault();
+        }
+
+        return EnvironmentState.FromData(data);
     }
 
     private void OnEntityDiscovered(KnowledgeEntity entity)
     {
-        // ÏÔÊ¾½âËøÌáÊ¾
-        gamePanel.AppendText($"<color=#FFD700>¡¾ÖªÊ¶½âËø¡¿·¢ÏÖÁË¡¸{entity.name}¡¹£¡</color>", false);
-    }
+        if (gamePanel == null || entity == null)
+            return;
 
-    public void LoadGame(RoleState newState, EnvironmentState newEnvState = null, MemorySnapshot memorySnapshot = null)
-    {
-        if (newState == null) return;
-
-        playerState = newState;
-        envState = newEnvState ?? EnvironmentState.GetDefault();
-        
-        if (memorySnapshot != null)
-        {
-            MemoryManager.Instance.RestoreFromSnapshot(memorySnapshot);
-        }
-
-        if (gamePanel != null)
-        {
-            gamePanel.UpdateStateDisplay(playerState);
-            gamePanel.AppendText($"\n<color=yellow>¡¾ÏµÍ³¡¿ÒÑ»Ö¸´ÖÁ´æµµµã¡£</color>", false);
-        }
+        gamePanel.AppendText($"<color=#FFD700>ã€çŸ¥è¯†è§£é”ã€‘å‘ç°äº†ã€Œ{entity.name}ã€ï¼</color>", false);
     }
 
     private void HandlePlayerInput(string input)
     {
-        gamePanel.AppendText($"{input}", true);
-        MemoryManager.Instance.AddUserMessage(input);
+        if (string.IsNullOrWhiteSpace(input))
+            return;
 
-        // ¸ù¾İÉèÖÃÑ¡ÔñÍ¬²½»òÒì²½ÒâÍ¼Ê¶±ğ
+        string trimmedInput = input.Trim();
+        gamePanel.AppendText(trimmedInput, true);
+        MemoryManager.Instance.AddUserMessage(trimmedInput);
+
         if (enableLLMIntentFallback)
-        {
-            HandlePlayerInputAsync(input);
-        }
+            HandlePlayerInputAsync(trimmedInput);
         else
-        {
-            HandlePlayerInputSync(input);
-        }
+            HandlePlayerInputSync(trimmedInput);
     }
 
-    /// <summary>
-    /// Í¬²½´¦Àí£¨½ö±¾µØ¹æÔòÒıÇæ£©
-    /// </summary>
     private void HandlePlayerInputSync(string input)
     {
-        var intent = IntentRecognizer.Instance.Recognize(input);
+        IntentResult intent = IntentRecognizer.Instance.Recognize(input);
         ProcessActionWithIntent(input, intent);
     }
 
-    /// <summary>
-    /// Òì²½´¦Àí£¨Ö§³Ö LLM ºó±¸£©
-    /// </summary>
     private void HandlePlayerInputAsync(string input)
     {
-        // ÏÔÊ¾Ë¼¿¼ÖĞ×´Ì¬
         gamePanel.ShowLoading(true);
-
-        IntentRecognizer.Instance.RecognizeAsync(input, (intent) =>
+        IntentRecognizer.Instance.RecognizeAsync(input, intent =>
         {
             gamePanel.ShowLoading(false);
             ProcessActionWithIntent(input, intent);
         });
     }
 
-    /// <summary>
-    /// ´¦ÀíÒÑÊ¶±ğÒâÍ¼µÄĞĞ¶¯
-    /// </summary>
     private void ProcessActionWithIntent(string input, IntentResult intent)
     {
-        // 1. ºÏ·¨ĞÔĞ£Ñé£¨º¬»·¾³ÒòËØ£©
-        if (!IARProcessor.Instance.CheckActionValidity(input, playerState, envState, out string failReason, out IntentResult _))
+        intent ??= new IntentResult();
+
+        if (!IARProcessor.Instance.CheckActionValidity(intent, playerState, envState, out string failReason))
         {
-            // Ê¹ÓÃ´«ÈëµÄ intent ¶ø·ÇĞ£Ñé·µ»ØµÄ
             gamePanel.AppendText($"<color=#FF6666>{failReason}</color>", false);
-            gamePanel.UpdateStateDisplay(playerState);
+            gamePanel.UpdateStateDisplay(playerState, envState);
             return;
         }
 
-        // 2. Ö´ĞĞÈ·¶¨ĞÔÂß¼­
         string logicResult = IARProcessor.Instance.ExecuteDeterministicLogic(input, playerState, envState, intent);
-        gamePanel.UpdateStateDisplay(playerState);
+        string knowledgeContext = GraphRAGManager.Instance.BuildKnowledgeContext(BuildKnowledgeQuery(input));
 
-        // 3. ¹¹½¨ÌáÊ¾´Ê£¨º¬»·¾³×´Ì¬£©
+        gamePanel.UpdateStateDisplay(playerState, envState);
+
         string systemPrompt = PromptBuilder.BuildSystemPrompt();
-        string userPrompt = PromptBuilder.BuildUserPromptWithIntent(input, playerState, envState, logicResult, intent);
-        
-        var messages = MemoryManager.Instance.BuildMessagesWithMemory(systemPrompt, userPrompt);
+        string userPrompt = PromptBuilder.BuildUserPromptWithIntent(input, playerState, envState, logicResult, intent, knowledgeContext);
+        LLMService.Message[] messages = MemoryManager.Instance.BuildMessagesWithMemory(systemPrompt, userPrompt);
+
+        if (!string.IsNullOrWhiteSpace(knowledgeContext))
+            Debug.Log($"[GameLoop] GraphRAG å‘½ä¸­çŸ¥è¯†ä¸Šä¸‹æ–‡:\n{knowledgeContext}");
 
         gamePanel.ShowLoading(true);
-        StringBuilder fullContentBuffer = new StringBuilder();
+        var fullContentBuffer = new StringBuilder();
 
-        // 4. Á÷Ê½ LLM ÇëÇó
         LLMService.Instance.PostStreamWithMessages(
             messages,
-            onTokenReceived: (token) =>
+            onTokenReceived: token =>
             {
                 gamePanel.AppendStreamToken(token);
                 fullContentBuffer.Append(token);
@@ -241,26 +281,40 @@ public class GameLoop : MonoBehaviour
             onComplete: () =>
             {
                 string rawText = fullContentBuffer.ToString();
-                
-                // 5. ½âÎö AI ·µ»ØµÄÖ¸Áî²¢Ó¦ÓÃ
-                IARProcessor.Instance.AnalyzeAndApplyAIResult(rawText, playerState);
+                string sanitizedText = LLMService.SanitizeVisibleText(rawText);
+                if (!string.Equals(rawText, sanitizedText, StringComparison.Ordinal))
+                    gamePanel.ReplaceLastStreamContent(rawText, sanitizedText);
 
-                // ¡ï¡ï¡ï ĞÂÔö£º´ÓAI»Ø¸´ÖĞÌáÈ¡²¢½âËøÖªÊ¶Í¼Æ×ÊµÌå ¡ï¡ï¡ï
-                GraphRAGManager.Instance.ExtractAndDiscoverFromText(rawText);
+                IARProcessor.Instance.AnalyzeAndApplyAIResult(rawText, playerState);
+                GraphRAGManager.Instance.ExtractAndDiscoverFromText(sanitizedText);
 
                 gamePanel.RemoveCmdTagsFromUI();
-                gamePanel.UpdateStateDisplay(playerState);
+                gamePanel.UpdateStateDisplay(playerState, envState);
                 gamePanel.ShowLoading(false);
                 gamePanel.FinishStream();
 
-                if (AudioMgr.Instance != null)
-                    AudioMgr.Instance.PlayPageTurnSfx();
+                AudioMgr.Instance?.PlayPageTurnSfx();
 
-                MemoryManager.Instance.AddAssistantMessage(rawText);
+                MemoryManager.Instance.AddAssistantMessage(sanitizedText);
                 GameSaveMgr.Instance.CreateCheckpoint(playerState, envState, input);
 
-                Debug.Log($"»ØºÏ½áÊø¡£ÒâÍ¼: {intent} | À´Ô´: {intent.recognitionSource}");
-            }
-        );
+                Debug.Log($"å›åˆç»“æŸã€‚æ„å›¾: {intent} | æ¥æº: {intent.recognitionSource}");
+            },
+            onStatus: message =>
+            {
+                if (!string.IsNullOrWhiteSpace(message))
+                    gamePanel.AppendText($"<color=#C58F2B>ã€ç³»ç»Ÿã€‘{message}</color>", false);
+            });
+    }
+
+    private string BuildKnowledgeQuery(string input)
+    {
+        if (envState == null)
+            return input;
+
+        envState.EnsureCollections();
+        string tags = envState.dynamicTags != null ? string.Join(" ", envState.dynamicTags) : string.Empty;
+        string clues = envState.unlockedClues != null ? string.Join(" ", envState.unlockedClues) : string.Empty;
+        return $"{input} {envState.locationName} {envState.currentObjective} {tags} {clues}".Trim();
     }
 }

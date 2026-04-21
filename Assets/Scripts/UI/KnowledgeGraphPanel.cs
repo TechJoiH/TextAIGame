@@ -195,8 +195,9 @@ public class KnowledgeGraphPanel : BasePanel
                 sb.AppendLine("<color=#FFD700>相关联的知识：</color>");
                 foreach (var (relatedEntity, relation) in relations)
                 {
-                    string relTypeName = GetRelationTypeName(relation.relationType);
-                    sb.AppendLine($"  • {relTypeName} → {relatedEntity.name}");
+                    string relationText = GraphRAGManager.Instance.GetRelationDisplayText(entity, relatedEntity, relation);
+                    if (!string.IsNullOrWhiteSpace(relationText))
+                        sb.AppendLine($"  • {relationText}");
                 }
                 detailRelations.text = sb.ToString();
             }
@@ -213,7 +214,7 @@ public class KnowledgeGraphPanel : BasePanel
 
         int discovered = GraphRAGManager.Instance.DiscoveredCount;
         int total = GraphRAGManager.Instance.TotalCount;
-        statsText.text = $"知识收集进度：{discovered} / {total}";
+        statsText.text = $"知识图谱进度：{discovered} / {total}";
     }
 
     private string GetEntityTypeName(EntityType type)
@@ -230,19 +231,4 @@ public class KnowledgeGraphPanel : BasePanel
         };
     }
 
-    private string GetRelationTypeName(RelationType type)
-    {
-        return type switch
-        {
-            RelationType.FoundIn => "出没于",
-            RelationType.GrowsIn => "生长于",
-            RelationType.Drops => "掉落",
-            RelationType.CounteredBy => "被克制",
-            RelationType.Cures => "可治疗",
-            RelationType.HostileTo => "敌对",
-            RelationType.SymbioticWith => "共生",
-            RelationType.RequiredFor => "用于",
-            _ => "关联"
-        };
-    }
 }

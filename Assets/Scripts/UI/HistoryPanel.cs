@@ -1,12 +1,13 @@
 using System.Collections.Generic;
+using Logic.Memory;
 using UnityEngine;
 using UnityEngine.UI;
 
 public class HistoryPanel : BasePanel
 {
     [Header("Refs")]
-    public Transform contentRoot;       // ScrollView µÄ Content
-    public GameObject slotPrefab;       // ´ø HistorySlotItem µÄÔ¤ÖÆÌå
+    public Transform contentRoot;       // ScrollView çš„ Content
+    public GameObject slotPrefab;       // å¸¦ HistorySlotItem çš„é¢„åˆ¶ä½“
     public Button closeBtn;
 
     private bool inited;
@@ -34,45 +35,52 @@ public class HistoryPanel : BasePanel
 
     private void RefreshList()
     {
-        Debug.Log($"[HistoryPanel] RefreshList ¿ªÊ¼, contentRoot: {contentRoot != null}, slotPrefab: {slotPrefab != null}");
+        Debug.Log($"[HistoryPanel] RefreshList å¼€å§‹, contentRoot: {contentRoot != null}, slotPrefab: {slotPrefab != null}");
         
         if (contentRoot == null)
         {
-            Debug.LogError("[HistoryPanel] contentRoot Îª¿Õ£¡ÇëÔÚ Inspector ÖĞ°ó¶¨");
+            Debug.LogError("[HistoryPanel] contentRoot ä¸ºç©ºï¼è¯·åœ¨ Inspector ä¸­ç»‘å®š");
             return;
         }
         
         if (slotPrefab == null)
         {
-            Debug.LogError("[HistoryPanel] slotPrefab Îª¿Õ£¡ÇëÔÚ Inspector ÖĞ°ó¶¨");
+            Debug.LogError("[HistoryPanel] slotPrefab ä¸ºç©ºï¼è¯·åœ¨ Inspector ä¸­ç»‘å®š");
             return;
         }
 
-        // Çå³ı¾ÉÏî
+        // æ¸…é™¤æ—§é¡¹
         for (int i = contentRoot.childCount - 1; i >= 0; i--)
             Destroy(contentRoot.GetChild(i).gameObject);
 
+        int createdCount = 0;
+        createdCount += AppendMemoryEntries();
+
         var slots = GameSaveMgr.Instance.GetAllCheckpoints();
-        Debug.Log($"[HistoryPanel] »ñÈ¡µ½ {slots.Count} ¸ö´æµµ");
+        Debug.Log($"[HistoryPanel] è·å–åˆ° {slots.Count} ä¸ªå­˜æ¡£");
 
         for (int i = 0; i < slots.Count; i++)
         {
             var header = slots[i];
-            Debug.Log($"[HistoryPanel] ´´½¨²ÛÎ» {i}: id={header.saveId}, time={header.timeDisplay}, summary={header.summary}");
+            Debug.Log($"[HistoryPanel] åˆ›å»ºæ§½ä½ {i}: id={header.saveId}, time={header.timeDisplay}, summary={header.summary}");
 
             GameObject obj = Instantiate(slotPrefab, contentRoot, false);
             var item = obj.GetComponent<HistorySlotItem>();
             if (item != null)
             {
-                item.Bind(header.saveId, header.timeDisplay, header.summary, OnSlotClicked);
+                item.Bind(header.saveId, $"å›æº¯ç‚¹ {header.timeDisplay}", header.summary, OnSlotClicked);
+                createdCount++;
             }
             else
             {
-                Debug.LogError("[HistoryPanel] slotPrefab È±ÉÙ HistorySlotItem ×é¼ş£¡");
+                Debug.LogError("[HistoryPanel] slotPrefab ç¼ºå°‘ HistorySlotItem ç»„ä»¶ï¼");
             }
         }
-        
-        Debug.Log($"[HistoryPanel] RefreshList Íê³É£¬¹²´´½¨ {slots.Count} ¸ö²ÛÎ»");
+
+        if (createdCount == 0)
+            CreateReadonlyEntry("æš‚æ— è®°å½•", "å½“å‰è¿˜æ²¡æœ‰å¯å›çœ‹çš„äº¤äº’æˆ–å›æº¯ç‚¹ã€‚");
+
+        Debug.Log($"[HistoryPanel] RefreshList å®Œæˆï¼Œå…±åˆ›å»º {createdCount} ä¸ªæ¡ç›®");
     }
 
     private void OnSlotClicked(string saveId)
@@ -83,15 +91,70 @@ public class HistoryPanel : BasePanel
         var fullData = GameSaveMgr.Instance.LoadCheckpointFull(saveId);
         if (fullData == null || fullData.roleState == null)
         {
-            Debug.LogError($"[HistoryPanel] ´æµµ¶ÁÈ¡Ê§°Ü: {saveId}");
+            Debug.LogError($"[HistoryPanel] å­˜æ¡£è¯»å–å¤±è´¥: {saveId}");
             return;
         }
 
         if (GameLoop.Instance != null)
-            GameLoop.Instance.LoadGame(fullData.roleState, fullData.environmentState, fullData.memorySnapshot);
+            GameLoop.Instance.LoadGame(
+                fullData.roleState,
+                fullData.environmentState,
+                fullData.memorySnapshot,
+                fullData.knowledgeGraphSnapshot);
 
         HideMe();
 
-        Debug.Log($"[HistoryPanel] ÒÑ»ØËİÖÁ: {saveId}");
+        Debug.Log($"[HistoryPanel] å·²å›æº¯è‡³: {saveId}");
+    }
+
+    private int AppendMemoryEntries()
+    {
+        int createdCount = 0;
+        var memoryManager = MemoryManager.Instance;
+        if (memoryManager == null)
+            return createdCount;
+
+        List<LongTermMemory> longTermMemories = memoryManager.GetLongTermMemoryEntries();
+        int longTermStart = Mathf.Max(0, longTermMemories.Count - 2);
+        for (int i = longTermStart; i < longTermMemories.Count; i++)
+        {
+            LongTermMemory memory = longTermMemories[i];
+            if (memory == null || string.IsNullOrWhiteSpace(memory.summary))
+                continue;
+
+            CreateReadonlyEntry("è®°å¿†æ‘˜è¦", memory.summary);
+            createdCount++;
+        }
+
+        List<DialogueEntry> dialogues = memoryManager.GetRecentDialogueEntries();
+        int shortTermStart = Mathf.Max(0, dialogues.Count - 6);
+        for (int i = shortTermStart; i < dialogues.Count; i++)
+        {
+            DialogueEntry entry = dialogues[i];
+            if (entry == null || string.IsNullOrWhiteSpace(entry.content))
+                continue;
+
+            string label = entry.role == "user" ? "ç©å®¶å‘è¨€" : "å™äº‹å›åº”";
+            CreateReadonlyEntry(label, TrimSummary(entry.content, 36));
+            createdCount++;
+        }
+
+        return createdCount;
+    }
+
+    private void CreateReadonlyEntry(string title, string summary)
+    {
+        GameObject obj = Instantiate(slotPrefab, contentRoot, false);
+        var item = obj.GetComponent<HistorySlotItem>();
+        if (item != null)
+            item.Bind(string.Empty, title, summary, null);
+    }
+
+    private static string TrimSummary(string value, int maxLength)
+    {
+        if (string.IsNullOrWhiteSpace(value) || value.Length <= maxLength)
+            return value ?? string.Empty;
+
+        return value.Substring(0, maxLength) + "...";
     }
 }

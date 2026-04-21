@@ -1,26 +1,15 @@
 using System;
+using System.Collections.Generic;
+using StateData.Role;
 using UnityEngine;
 
 namespace StateData.Environment
 {
-    [CreateAssetMenu(fileName = "EnvironmentData", menuName = "GameData/Environment")]
-    public class EnvironmentData : ScriptableObject
-    {
-        public string locationId;
-        public string locationName;     // Èç£ºÎ£Ò¡É½
-        public string biome;            // É½Âö/ÕÓÔó/É­ÁÖ
-        public WeatherType weather;
-        public TimeOfDay timeOfDay;
-        
-        [TextArea(3, 6)]
-        public string narrativeHint;    // ¸ø AI µÄ»·¾³ĞøĞ´ÌáÊ¾
-    }
-
     public enum WeatherType { Clear, Foggy, Rainy, Stormy }
     public enum TimeOfDay { Dawn, Day, Dusk, Night }
 
     /// <summary>
-    /// ¿ÉĞòÁĞ»¯µÄ»·¾³ÔËĞĞÊ±×´Ì¬£¨ÓÃÓÚ JSON ×¢Èë AI Prompt£©
+    /// å¯åºåˆ—åŒ–çš„ç¯å¢ƒè¿è¡Œæ—¶çŠ¶æ€ï¼Œç”¨äº Prompt æ³¨å…¥ä¸å­˜æ¡£æ¢å¤ã€‚
     /// </summary>
     [Serializable]
     public sealed class EnvironmentState
@@ -28,22 +17,60 @@ namespace StateData.Environment
         public string locationId;
         public string locationName;
         public string biome;
-        public string weather;      // ×Ö·û´®»¯±ãÓÚ AI Àí½â
+        public string weather;
         public string timeOfDay;
         public string narrativeHint;
+        public string currentObjective;
+        public List<string> dynamicTags = new List<string>();
+        public List<string> unlockedClues = new List<string>();
 
-        // »·¾³±êÇ©£¨ÓÃÓÚ±¾µØÂß¼­ÅĞ¶¨£©
-        public bool isWet;          // ³±Êª»·¾³£¨ÓêÌì/ÕÓÔó£©
-        public bool isDark;         // ºÚ°µ»·¾³£¨Ò¹Íí/¶´Ñ¨£©
-        public bool isWindy;        // ´ó·ç»·¾³£¨±©·çÓê£©
-        public bool isFoggy;        // ÃÔÎí»·¾³
+        public bool isWet;
+        public bool isDark;
+        public bool isWindy;
+        public bool isFoggy;
 
-        /// <summary>
-        /// ´Ó ScriptableObject ¹¹½¨ÔËĞĞÊ±×´Ì¬
-        /// </summary>
+        public void EnsureCollections()
+        {
+            dynamicTags ??= new List<string>();
+            unlockedClues ??= new List<string>();
+
+            AddUnique(dynamicTags, GetWeatherTag(weather));
+            AddUnique(dynamicTags, GetTimeTag(timeOfDay));
+            AddUnique(dynamicTags, biome);
+        }
+
+        public void AddTag(string tag)
+        {
+            AddUnique(dynamicTags, tag);
+        }
+
+        public bool HasTag(string tag)
+        {
+            return ContainsValue(dynamicTags, tag);
+        }
+
+        public bool RemoveTag(string tag)
+        {
+            if (dynamicTags == null || string.IsNullOrWhiteSpace(tag))
+                return false;
+
+            return dynamicTags.RemoveAll(item => string.Equals(item, tag, StringComparison.OrdinalIgnoreCase)) > 0;
+        }
+
+        public void AddClue(string clue)
+        {
+            AddUnique(unlockedClues, clue);
+        }
+
+        public bool HasClue(string clue)
+        {
+            return ContainsValue(unlockedClues, clue);
+        }
+
         public static EnvironmentState FromData(EnvironmentData data)
         {
-            if (data == null) return GetDefault();
+            if (data == null)
+                return GetDefault();
 
             var state = new EnvironmentState
             {
@@ -53,30 +80,210 @@ namespace StateData.Environment
                 weather = data.weather.ToString(),
                 timeOfDay = data.timeOfDay.ToString(),
                 narrativeHint = data.narrativeHint,
-                
-                // ÍÆµ¼»·¾³±êÇ©
-                isWet = data.weather == WeatherType.Rainy || data.weather == WeatherType.Stormy || data.biome == "ÕÓÔó",
+                currentObjective = "è§‚å¯Ÿæ‹›æ‘‡å±±é›¾ä¸­çš„è‰æœ¨ï¼Œæ‰¾åˆ°ç»§ç»­æ·±å…¥å±±è…¹çš„çº¿ç´¢ã€‚",
+                isWet = data.weather == WeatherType.Rainy || data.weather == WeatherType.Stormy || data.biome == "æ²¼æ³½",
                 isDark = data.timeOfDay == TimeOfDay.Night || data.timeOfDay == TimeOfDay.Dusk,
                 isWindy = data.weather == WeatherType.Stormy,
-                isFoggy = data.weather == WeatherType.Foggy
+                isFoggy = data.weather == WeatherType.Foggy,
+                dynamicTags = new List<string>(),
+                unlockedClues = new List<string>()
             };
+
+            state.EnsureCollections();
             return state;
         }
 
         public static EnvironmentState GetDefault()
         {
-            return new EnvironmentState
+            var state = new EnvironmentState
             {
                 locationId = "unknown",
-                locationName = "Î´ÖªÖ®µØ",
-                biome = "»ÄÒ°",
-                weather = "Clear",
-                timeOfDay = "Day",
-                narrativeHint = "",
+                locationName = "æœªçŸ¥ä¹‹åœ°",
+                biome = "è’é‡",
+                weather = WeatherType.Clear.ToString(),
+                timeOfDay = TimeOfDay.Day.ToString(),
+                narrativeHint = string.Empty,
+                currentObjective = "å…ˆç¡®è®¤å‘¨å›´ç¯å¢ƒï¼Œå†å†³å®šä¸‹ä¸€æ­¥è¡ŒåŠ¨ã€‚",
                 isWet = false,
                 isDark = false,
                 isWindy = false,
-                isFoggy = false
+                isFoggy = false,
+                dynamicTags = new List<string>(),
+                unlockedClues = new List<string>()
+            };
+
+            state.EnsureCollections();
+            return state;
+        }
+
+        private static void AddUnique(List<string> values, string candidate)
+        {
+            if (values == null || string.IsNullOrWhiteSpace(candidate) || ContainsValue(values, candidate))
+                return;
+
+            values.Add(candidate.Trim());
+        }
+
+        private static bool ContainsValue(List<string> values, string candidate)
+        {
+            if (values == null || string.IsNullOrWhiteSpace(candidate))
+                return false;
+
+            foreach (var value in values)
+            {
+                if (string.Equals(value, candidate, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static string GetWeatherTag(string rawWeather)
+        {
+            return rawWeather switch
+            {
+                nameof(WeatherType.Foggy) => "æ™¨é›¾",
+                nameof(WeatherType.Rainy) => "æ½®æ¹¿",
+                nameof(WeatherType.Stormy) => "ç‹‚é£",
+                nameof(WeatherType.Clear) => "æ¸…æœ—",
+                _ => string.Empty
+            };
+        }
+
+        private static string GetTimeTag(string rawTime)
+        {
+            return rawTime switch
+            {
+                nameof(TimeOfDay.Dawn) => "ç ´æ™“",
+                nameof(TimeOfDay.Day) => "ç™½æ˜¼",
+                nameof(TimeOfDay.Dusk) => "è–„æš®",
+                nameof(TimeOfDay.Night) => "å¤œè‰²",
+                _ => string.Empty
+            };
+        }
+    }
+
+    [Serializable]
+    public sealed class ScenarioConfig
+    {
+        public string projectTitle = "é”®å…¥ä½³å¢ƒ";
+        public string projectSubtitle = "å±±æµ·ç»æ–‡å­—å†’é™©";
+        public string systemTagline = "æ™ºèƒ½è£å†³ / çŸ¥è¯†å›¾è°±";
+        public string chapterTitle = "å¤§è’èš€çµ";
+        public string openingNarration =
+            "ä½ ç¼“ç¼“ççœ¼ï¼Œæ™¨é›¾æ­£æ²¿ç€å±±è„Šä¸æ¾æ ¹æ¸¸èµ°ã€‚æ‹›æ‘‡å±±çš„é£å¸¦ç€è‰æœ¨æ±æ¶²çš„æ¸…è‹¦ï¼ŒåƒæŸç§æ´»ç‰©åœ¨è€³ç•”ä½ä¼å‘¼å¸ã€‚";
+        public string openingNotice =
+            "å½“å‰æ¼”ç¤ºåˆ‡ç‰‡èšç„¦æ‹›æ‘‡å±±ï¼šç¯å¢ƒè§‚å¯Ÿã€çµè‰é‡‡é›†ä¸å¼‚è±¡é­é‡ã€‚";
+        public string environmentResourcePath = "Configs/ZhaoYaoShanEnvironment";
+        public ScenarioRoleData initialRole = ScenarioRoleData.CreateDefault();
+        public List<string> initialDiscoveredEntityIds = new List<string> { "loc_zhaoyao" };
+
+        public static ScenarioConfig GetDefault()
+        {
+            return new ScenarioConfig();
+        }
+
+        public void EnsureDefaults()
+        {
+            if (string.IsNullOrWhiteSpace(projectTitle))
+                projectTitle = "é”®å…¥ä½³å¢ƒ";
+            if (string.IsNullOrWhiteSpace(projectSubtitle))
+                projectSubtitle = "å±±æµ·ç»æ–‡å­—å†’é™©";
+            if (string.IsNullOrWhiteSpace(systemTagline))
+                systemTagline = "æ™ºèƒ½è£å†³ / çŸ¥è¯†å›¾è°±";
+            if (string.IsNullOrWhiteSpace(chapterTitle))
+                chapterTitle = "å¤§è’èš€çµ";
+            if (string.IsNullOrWhiteSpace(environmentResourcePath))
+                environmentResourcePath = "Configs/ZhaoYaoShanEnvironment";
+
+            initialRole ??= ScenarioRoleData.CreateDefault();
+            initialDiscoveredEntityIds ??= new List<string>();
+        }
+
+        public RoleState BuildRoleState()
+        {
+            EnsureDefaults();
+            return initialRole.ToRoleState();
+        }
+    }
+
+    [Serializable]
+    public sealed class ScenarioRoleData
+    {
+        public string name = "æ—æ¸Š";
+        public string roleType = "ç©å®¶";
+        public string race = "å‡¡äºº";
+        public string faction = "æ— é—¨æ•£ä¿®";
+        public int level = 1;
+        public int currentExp;
+        public int expToNextLevel = 100;
+        public int currentHealth = 80;
+        public int maxHealth = 100;
+        public int currentMana = 50;
+        public int maxMana = 50;
+        public int strength = 10;
+        public int agility = 8;
+        public int intelligence = 12;
+        public string cultivationSchool = "æ•£ä¿®åçº³";
+        public int cultivationStage = 1;
+        public int loyalty;
+        public int affection;
+        public string weapon = "";
+        public List<string> inventory = new List<string> { "æ²»ç–—è¯æ°´", "ç«æŠ˜" };
+        public List<string> equippedSkills = new List<string> { "ç«çƒæœ¯", "å¾¡é£è¯€" };
+
+        public static ScenarioRoleData CreateDefault()
+        {
+            return new ScenarioRoleData();
+        }
+
+        public RoleState ToRoleState()
+        {
+            return new RoleState
+            {
+                identity = new IdentityState
+                {
+                    name = name,
+                    roleType = roleType,
+                    race = race,
+                    faction = faction
+                },
+                attributes = new AttributeState
+                {
+                    level = level,
+                    currentExp = currentExp,
+                    expToNextLevel = expToNextLevel,
+                    currentHealth = currentHealth,
+                    maxHealth = maxHealth,
+                    currentMana = currentMana,
+                    maxMana = maxMana,
+                    strength = strength,
+                    agility = agility,
+                    intelligence = intelligence
+                },
+                cultivation = new CultivationState
+                {
+                    cultivationSchool = cultivationSchool,
+                    cultivationStage = cultivationStage
+                },
+                social = new SocialState
+                {
+                    loyalty = loyalty,
+                    affection = affection
+                },
+                equipment = new EquipmentState
+                {
+                    weapon = weapon,
+                    inventory = inventory != null ? new List<string>(inventory) : new List<string>(),
+                    equippedSkills = equippedSkills != null ? new List<string>(equippedSkills) : new List<string>()
+                },
+                runtime = new RuntimeFlags
+                {
+                    isAlive = true,
+                    isCriticalState = false,
+                    hasMajorChange = false
+                },
+                statusEffects = new StatusEffectState()
             };
         }
     }

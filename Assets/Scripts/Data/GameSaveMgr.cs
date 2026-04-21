@@ -5,20 +5,22 @@ using UnityEngine;
 using StateData.Role;
 using StateData.Environment;
 using Logic.Memory;
+using Data.KnowledgeGraph;
+using Logic.GraphRAG;
 
 /// <summary>
-/// ´æµµ²ÛÎ»ÕªÒª£¨ÓÃÓÚÁĞ±íÏÔÊ¾£©
+/// å­˜æ¡£æ§½ä½æ‘˜è¦ï¼ˆç”¨äºåˆ—è¡¨æ˜¾ç¤ºï¼‰
 /// </summary>
 [Serializable]
 public class SaveSlotHeader
 {
-    public string saveId;       // Î¨Ò»ID
-    public string timeDisplay;  // ÏÔÊ¾Ê±¼ä
-    public string summary;      // ÄÚÈİÕªÒª
+    public string saveId;       // å”¯ä¸€ID
+    public string timeDisplay;  // æ˜¾ç¤ºæ—¶é—´
+    public string summary;      // å†…å®¹æ‘˜è¦
 }
 
 /// <summary>
-/// ÍêÕû´æµµÊı¾İ
+/// å®Œæ•´å­˜æ¡£æ•°æ®
 /// </summary>
 [Serializable]
 public class FullSaveData
@@ -26,10 +28,11 @@ public class FullSaveData
     public RoleState roleState;
     public EnvironmentState environmentState;
     public MemorySnapshot memorySnapshot;
+    public KnowledgeGraphSnapshot knowledgeGraphSnapshot;
 }
 
 /// <summary>
-/// ´æµµÇåµ¥
+/// å­˜æ¡£æ¸…å•
 /// </summary>
 [Serializable]
 public class SaveManifest
@@ -38,7 +41,7 @@ public class SaveManifest
 }
 
 /// <summary>
-/// ´æµµ¹ÜÀíÆ÷£¨Ö§³Ö½ÇÉ«×´Ì¬+¼ÇÒä¿ìÕÕ£©
+/// å­˜æ¡£ç®¡ç†å™¨ï¼ˆæ”¯æŒè§’è‰²çŠ¶æ€+è®°å¿†å¿«ç…§ï¼‰
 /// </summary>
 public class GameSaveMgr : MonoSingleton<GameSaveMgr>
 {
@@ -58,19 +61,19 @@ public class GameSaveMgr : MonoSingleton<GameSaveMgr>
     {
         string path = Application.persistentDataPath + "/" + MANIFEST_NAME + ".json";
         bool fileExists = File.Exists(path);
-        Debug.Log($"[GameSaveMgr] ¼ÓÔØÇåµ¥: {path}, ÎÄ¼ş´æÔÚ: {fileExists}");
+        Debug.Log($"[GameSaveMgr] åŠ è½½æ¸…å•: {path}, æ–‡ä»¶å­˜åœ¨: {fileExists}");
         
         if (fileExists)
         {
             try
             {
                 string jsonStr = File.ReadAllText(path);
-                Debug.Log($"[GameSaveMgr] Çåµ¥JSONÄÚÈİ: {jsonStr.Substring(0, Mathf.Min(200, jsonStr.Length))}...");
+                Debug.Log($"[GameSaveMgr] æ¸…å•JSONå†…å®¹: {jsonStr.Substring(0, Mathf.Min(200, jsonStr.Length))}...");
                 manifest = LitJson.JsonMapper.ToObject<SaveManifest>(jsonStr);
             }
             catch (System.Exception e)
             {
-                Debug.LogError($"[GameSaveMgr] Çåµ¥½âÎöÊ§°Ü: {e.Message}");
+                Debug.LogError($"[GameSaveMgr] æ¸…å•è§£æå¤±è´¥: {e.Message}");
                 manifest = null;
             }
         }
@@ -82,17 +85,17 @@ public class GameSaveMgr : MonoSingleton<GameSaveMgr>
             manifest.slots = new List<SaveSlotHeader>();
             
         manifestLoaded = true;
-        Debug.Log($"[GameSaveMgr] Çåµ¥¼ÓÔØÍê³É£¬´æµµÊıÁ¿: {manifest.slots.Count}");
+        Debug.Log($"[GameSaveMgr] æ¸…å•åŠ è½½å®Œæˆï¼Œå­˜æ¡£æ•°é‡: {manifest.slots.Count}");
     }
 
     /// <summary>
-    /// ´´½¨ĞÂµÄ´æµµ½Úµã£¨°üº¬»·¾³×´Ì¬ºÍ¼ÇÒä¿ìÕÕ£©
+    /// åˆ›å»ºæ–°çš„å­˜æ¡£èŠ‚ç‚¹ï¼ˆåŒ…å«ç¯å¢ƒçŠ¶æ€å’Œè®°å¿†å¿«ç…§ï¼‰
     /// </summary>
     public void CreateCheckpoint(RoleState currentState, EnvironmentState envState, string userLastInput)
     {
         if (currentState == null)
         {
-            Debug.LogError("[GameSaveMgr] currentState Îª¿Õ£¬ÎŞ·¨´´½¨´æµµ");
+            Debug.LogError("[GameSaveMgr] currentState ä¸ºç©ºï¼Œæ— æ³•åˆ›å»ºå­˜æ¡£");
             return;
         }
 
@@ -102,15 +105,20 @@ public class GameSaveMgr : MonoSingleton<GameSaveMgr>
         {
             roleState = currentState,
             environmentState = envState,
-            memorySnapshot = MemoryManager.Instance.GetSnapshot()
+            memorySnapshot = MemoryManager.Instance.GetSnapshot(),
+            knowledgeGraphSnapshot = GraphRAGManager.Instance.GetSnapshot()
         };
         
         JsonMgr.Instance.SaveData($"save_{id}", fullSave, JsonType.LitJson);
         
         string savePath = Application.persistentDataPath + $"/save_{id}.json";
-        Debug.Log($"[GameSaveMgr] ´æµµÊı¾İÒÑ±£´æ: {savePath}, ÎÄ¼ş´æÔÚ: {File.Exists(savePath)}");
+        Debug.Log($"[GameSaveMgr] å­˜æ¡£æ•°æ®å·²ä¿å­˜: {savePath}, æ–‡ä»¶å­˜åœ¨: {File.Exists(savePath)}");
 
         string summary = userLastInput ?? "";
+        if (!string.IsNullOrWhiteSpace(envState?.locationName))
+            summary = $"{envState.locationName} Â· {summary}".Trim().TrimEnd('Â·');
+        else if (string.IsNullOrWhiteSpace(summary) && !string.IsNullOrWhiteSpace(envState?.currentObjective))
+            summary = envState.currentObjective;
         summary = summary.Length > 15 ? summary.Substring(0, 15) + "..." : summary;
 
         SaveSlotHeader header = new SaveSlotHeader
@@ -129,7 +137,7 @@ public class GameSaveMgr : MonoSingleton<GameSaveMgr>
         
         JsonMgr.Instance.SaveData(MANIFEST_NAME, manifest, JsonType.LitJson);
         
-        Debug.Log($"[GameSaveMgr] Çåµ¥ÒÑ¸üĞÂ£¬µ±Ç°´æµµÊı: {manifest.slots.Count}");
+        Debug.Log($"[GameSaveMgr] æ¸…å•å·²æ›´æ–°ï¼Œå½“å‰å­˜æ¡£æ•°: {manifest.slots.Count}");
     }
 
     public void CreateCheckpoint(RoleState currentState, string userLastInput)
@@ -140,7 +148,7 @@ public class GameSaveMgr : MonoSingleton<GameSaveMgr>
     public FullSaveData LoadCheckpointFull(string saveId)
     {
         if (string.IsNullOrEmpty(saveId)) return null;
-        return JsonMgr.Instance.LoadData<FullSaveData>($"save_{saveId}", JsonType.LitJson);
+        return EnsureCompatibility(JsonMgr.Instance.LoadData<FullSaveData>($"save_{saveId}", JsonType.LitJson));
     }
 
     public RoleState LoadCheckpoint(string saveId)
@@ -150,11 +158,11 @@ public class GameSaveMgr : MonoSingleton<GameSaveMgr>
     }
 
     /// <summary>
-    /// »ñÈ¡ËùÓĞ´æµµµã£¨×îĞÂµÄÔÚÇ°£©
+    /// è·å–æ‰€æœ‰å­˜æ¡£ç‚¹ï¼ˆæœ€æ–°çš„åœ¨å‰ï¼‰
     /// </summary>
     public List<SaveSlotHeader> GetAllCheckpoints()
     {
-        // È·±£Çåµ¥ÒÑ¼ÓÔØ
+        // ç¡®ä¿æ¸…å•å·²åŠ è½½
         if (!manifestLoaded || manifest == null)
         {
             LoadManifest();
@@ -162,14 +170,14 @@ public class GameSaveMgr : MonoSingleton<GameSaveMgr>
         
         if (manifest == null || manifest.slots == null)
         {
-            Debug.LogWarning("[GameSaveMgr] GetAllCheckpoints: Çåµ¥Îª¿Õ");
+            Debug.LogWarning("[GameSaveMgr] GetAllCheckpoints: æ¸…å•ä¸ºç©º");
             return new List<SaveSlotHeader>();
         }
 
         List<SaveSlotHeader> reversed = new List<SaveSlotHeader>(manifest.slots);
         reversed.Reverse();
         
-        Debug.Log($"[GameSaveMgr] GetAllCheckpoints ·µ»Ø {reversed.Count} ¸ö´æµµ");
+        Debug.Log($"[GameSaveMgr] GetAllCheckpoints è¿”å› {reversed.Count} ä¸ªå­˜æ¡£");
         return reversed;
     }
 
@@ -180,6 +188,29 @@ public class GameSaveMgr : MonoSingleton<GameSaveMgr>
         manifest.slots.RemoveAll(s => s.saveId == saveId);
         JsonMgr.Instance.SaveData(MANIFEST_NAME, manifest, JsonType.LitJson);
         
-        Debug.Log($"[GameSaveMgr] ´æµµÒÑÉ¾³ı: {saveId}");
+        Debug.Log($"[GameSaveMgr] å­˜æ¡£å·²åˆ é™¤: {saveId}");
+    }
+
+    public static FullSaveData EnsureCompatibility(FullSaveData saveData)
+    {
+        if (saveData == null)
+            return null;
+
+        saveData.environmentState ??= EnvironmentState.GetDefault();
+        saveData.environmentState.EnsureCollections();
+        saveData.knowledgeGraphSnapshot ??= new KnowledgeGraphSnapshot
+        {
+            entities = new List<KnowledgeEntity>(),
+            relations = new List<KnowledgeRelation>(),
+            discoveredEntityIds = new List<string>()
+        };
+
+        if (saveData.memorySnapshot != null)
+        {
+            saveData.memorySnapshot.shortTermMemory ??= new List<DialogueEntry>();
+            saveData.memorySnapshot.longTermMemories ??= new List<LongTermMemory>();
+        }
+
+        return saveData;
     }
 }

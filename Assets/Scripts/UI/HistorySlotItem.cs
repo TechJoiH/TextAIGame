@@ -24,6 +24,7 @@ public class HistorySlotItem : MonoBehaviour
         {
             button.onClick.RemoveListener(OnButtonClicked);
             button.onClick.AddListener(OnButtonClicked);
+            button.interactable = onClick != null && !string.IsNullOrWhiteSpace(saveId);
         }
     }
 

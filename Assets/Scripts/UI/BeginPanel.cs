@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -15,6 +16,13 @@ public class BeginPanel : BasePanel
         BindButton(btnBegin, OnClickBegin);
         BindButton(btnSet, OnClickSet);
         BindButton(btnExit, OnClickExit);
+        ApplyBranding();
+    }
+
+    protected override void OnShowAnimation()
+    {
+        base.OnShowAnimation();
+        ApplyBranding();
     }
 
     private static void BindButton(Button btn, UnityEngine.Events.UnityAction onClick)
@@ -26,7 +34,7 @@ public class BeginPanel : BasePanel
 
     private void OnClickBegin()
     {
-        // ²¥·Å´ò¿ªÃæ°åµÄÌØÊâÒôĞ§
+        // æ’­æ”¾æ‰“å¼€é¢æ¿çš„ç‰¹æ®ŠéŸ³æ•ˆ
         if (AudioMgr.Instance != null)
             AudioMgr.Instance.PlayPanelOpenSfx();
 
@@ -35,19 +43,19 @@ public class BeginPanel : BasePanel
         if (GameLoop.Instance != null)
             GameLoop.Instance.StartNewGame();
         else
-            Debug.LogError("[BeginPanel] Î´ÕÒµ½ GameLoop.Instance£¬ÎŞ·¨¿ªÊ¼ÓÎÏ·£¡");
+            Debug.LogError("[BeginPanel] æœªæ‰¾åˆ° GameLoop.Instanceï¼Œæ— æ³•å¼€å§‹æ¸¸æˆï¼");
     }
 
     private void OnClickSet()
     {
-        // ²¥·Å´ò¿ªÃæ°åµÄÌØÊâÒôĞ§
+        // æ’­æ”¾æ‰“å¼€é¢æ¿çš„ç‰¹æ®ŠéŸ³æ•ˆ
         if (AudioMgr.Instance != null)
             AudioMgr.Instance.PlayPanelOpenSfx();
 
         var panel = UIMgr.Instance.ShowPanel<SetPanel>();
         if (panel == null)
         {
-            Debug.LogWarning("[BeginPanel] ´ò¿ª SetPanel Ê§°Ü£¬ÇëÈ·ÈÏÔ¤ÖÆÌåÂ·¾¶Îª Resources/UI/SetPanel£¬ÇÒ¸Ã½Å±¾¹ÒÔØÁË SetPanel ×é¼ş£¡");
+            Debug.LogWarning("[BeginPanel] æ‰“å¼€ SetPanel å¤±è´¥ï¼Œè¯·ç¡®è®¤é¢„åˆ¶ä½“è·¯å¾„ä¸º Resources/UI/SetPanelï¼Œä¸”è¯¥è„šæœ¬æŒ‚è½½äº† SetPanel ç»„ä»¶ï¼");
             return;
         }
 
@@ -56,7 +64,7 @@ public class BeginPanel : BasePanel
 
     private void OnClickExit()
     {
-        // ²¥·ÅÆÕÍ¨µã»÷ÒôĞ§
+        // æ’­æ”¾æ™®é€šç‚¹å‡»éŸ³æ•ˆ
         if (AudioMgr.Instance != null)
             AudioMgr.Instance.PlayClickSfx();
 
@@ -65,5 +73,43 @@ public class BeginPanel : BasePanel
 #else
         Application.Quit();
 #endif
+    }
+
+    private void ApplyBranding()
+    {
+        SetButtonLabel(btnBegin, "å¼€å§‹å±±æµ·ä¹‹æ—…");
+        SetButtonLabel(btnSet, "æ¼”ç¤ºè®¾ç½®");
+        SetButtonLabel(btnExit, "é€€å‡ºæ¼”ç¤º");
+
+        RemoveRuntimeBrandingNode("RuntimeProjectTitle");
+        RemoveRuntimeBrandingNode("RuntimeProjectSubtitle");
+        RemoveRuntimeBrandingNode("RuntimeBeginHint");
+    }
+
+    private static void SetButtonLabel(Button button, string labelText)
+    {
+        if (button == null)
+            return;
+
+        var label = button.GetComponentInChildren<TMP_Text>(true);
+        if (label != null)
+            label.text = labelText;
+    }
+
+    private void RemoveRuntimeBrandingNode(string objectName)
+    {
+        if (string.IsNullOrWhiteSpace(objectName))
+            return;
+
+        var runtimeNode = transform.Find(objectName);
+        if (runtimeNode == null)
+        {
+            var titleAnchor = transform.Find("ImageTittle");
+            if (titleAnchor != null)
+                runtimeNode = titleAnchor.Find(objectName);
+        }
+
+        if (runtimeNode != null)
+            Destroy(runtimeNode.gameObject);
     }
 }

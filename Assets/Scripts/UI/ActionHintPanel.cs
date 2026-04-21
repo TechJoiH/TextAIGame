@@ -1,37 +1,36 @@
-﻿using UnityEngine;
-using UnityEngine.UI;
-using TMPro;
-using LitJson;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
+using LitJson;
+using TMPro;
+using UnityEngine;
+using UnityEngine.UI;
 
 public class ActionHintPanel : BasePanel
 {
-    [Header("必须在 Inspector 拖拽赋值")]
-    public Button[] actionBtns;      // 3个建议按钮
-    public TMP_Text[] actionTexts;   // 3个按钮上的文字
-    public Button closeBtn;          // 关闭按钮
-    public GameObject loadingObj;    // 加载中的转圈物体
+    [Header("需要在 Inspector 中绑定")]
+    public Button[] actionBtns;
+    public TMP_Text[] actionTexts;
+    public Button closeBtn;
+    public GameObject loadingObj;
 
     public override void Init()
     {
-        // 绑定关闭按钮
-        if (closeBtn != null) closeBtn.onClick.AddListener(() =>
+        if (closeBtn != null)
         {
-            // 播放普通点击音效
-            if (AudioMgr.Instance != null)
-                AudioMgr.Instance.PlayClickSfx();
+            closeBtn.onClick.RemoveAllListeners();
+            closeBtn.onClick.AddListener(() =>
+            {
+                AudioMgr.Instance?.PlayClickSfx();
+                HideMe();
+            });
+        }
 
-            HideMe();
-        });
-
-        // 绑定建议按钮点击事件
         for (int i = 0; i < actionBtns.Length; i++)
         {
-            int index = i; // 闭包保护
-            actionBtns[i].onClick.AddListener(() => {
-                ApplyHint(actionTexts[index].text);
-            });
+            int index = i;
+            actionBtns[i].onClick.RemoveAllListeners();
+            actionBtns[i].onClick.AddListener(() => ApplyHint(actionTexts[index].text));
         }
     }
 
@@ -41,86 +40,189 @@ public class ActionHintPanel : BasePanel
         StartCoroutine(RequestHints());
     }
 
-    // 请求 AI 建议的核心逻辑
     private IEnumerator RequestHints()
     {
-        // 1. 安全显示 Loading (加了 null 检查防止报错)
-        if (loadingObj != null) loadingObj.SetActive(true);
+        SetLoading(true);
 
-        // 隐藏所有按钮，准备加载
-        if (actionBtns != null)
-        {
-            foreach (var btn in actionBtns)
-                if (btn != null) btn.gameObject.SetActive(false);
-        }
+        var state = GameLoop.Instance != null ? GameLoop.Instance.CurrentState : null;
+        var envState = GameLoop.Instance != null ? GameLoop.Instance.CurrentEnvironment : null;
+        string knowledgeSeed = $"{envState?.locationName} {envState?.narrativeHint} {string.Join(" ", state?.equipment?.inventory ?? new List<string>())}";
+        string knowledgeContext = Logic.GraphRAG.GraphRAGManager.Instance.BuildKnowledgeContext(knowledgeSeed);
+        string prompt = PromptBuilder.BuildHintPrompt(state, envState, knowledgeContext);
 
-        // ==========================================
-        // 这里是模拟 AI 思考 (正式版请解开下方的 LLM 代码)
-        // ==========================================
+        string response = null;
+        string statusMessage = null;
+        bool finished = false;
 
-        // 临时测试：等待 1 秒
-        yield return new WaitForSeconds(1f);
-
-        // 模拟数据 (如果你接好了 LLM，请把这里替换为 LLMService 的调用)
-        List<string> hints = new List<string>() { "观察周围环境", "检查自己的身体", "呼喊名字" };
-
-        // ==========================================
-
-        // 2. 显示结果
-        for (int i = 0; i < actionBtns.Length; i++)
-        {
-            if (actionBtns[i] != null && i < hints.Count)
+        LLMService.Instance.PostNonStream(
+            "你是严格输出 JSON 数组的行动建议器。",
+            prompt,
+            onComplete: result =>
             {
-                actionBtns[i].gameObject.SetActive(true);
-                if (actionTexts[i] != null) actionTexts[i].text = hints[i];
-            }
-        }
+                response = result;
+                finished = true;
+            },
+            onStatus: message => statusMessage = message);
 
-        // 3. 关闭 Loading
-        if (loadingObj != null) loadingObj.SetActive(false);
+        while (!finished)
+            yield return null;
+
+        bool parsed = TryParseHintArray(response, out var parsedHints);
+        List<string> hints = parsed
+            ? parsedHints
+            : BuildLocalFallbackHints(state, envState);
+
+        if (!string.IsNullOrWhiteSpace(statusMessage) || !parsed)
+            NotifyMainPanel(statusMessage ?? "智能建议暂不可用，已切换为本地规则建议。");
+
+        ApplyHintsToButtons(hints);
+        SetLoading(false);
     }
 
-    // 应用建议并发送
-    private void ApplyHint(string hint)
+    public static bool TryParseHintArray(string rawText, out List<string> hints)
     {
-        // 播放普通点击音效
-        if (AudioMgr.Instance != null)
-            AudioMgr.Instance.PlayClickSfx();
+        hints = new List<string>();
+        if (string.IsNullOrWhiteSpace(rawText))
+            return false;
 
-        // 尝试从 UI 管理器获取
-        var mainPanel = UIMgr.Instance.GetPanel<MainGamePanel>();
-
-        // 【关键修复】如果管理器里没找到（比如你是直接把面板拖在场景里的），
-        // 就尝试直接在场景里暴力查找
-        if (mainPanel == null)
+        try
         {
-            mainPanel = FindObjectOfType<MainGamePanel>();
+            JsonData data = JsonMapper.ToObject(rawText.Trim());
+            if (data == null || !data.IsArray || data.Count != 3)
+                return false;
+
+            for (int i = 0; i < data.Count; i++)
+            {
+                if (!data[i].IsString)
+                    return false;
+
+                string hint = ((string)data[i]).Trim();
+                if (string.IsNullOrWhiteSpace(hint))
+                    return false;
+
+                hints.Add(hint);
+            }
+
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    public static List<string> BuildLocalFallbackHints(StateData.Role.RoleState state, StateData.Environment.EnvironmentState envState)
+    {
+        var hints = new List<string>();
+        envState ??= StateData.Environment.EnvironmentState.GetDefault();
+
+        if (state?.attributes != null &&
+            state.attributes.currentHealth <= Mathf.Max(35, state.attributes.maxHealth / 3) &&
+            state.equipment?.inventory != null &&
+            state.equipment.inventory.Any(item => item.Contains("药")))
+        {
+            hints.Add("使用治疗药水");
         }
 
-        if (mainPanel != null)
+        if (envState.isFoggy)
         {
-            // 步骤 A: 填入文字
-            if (mainPanel.inputField != null)
-                mainPanel.inputField.text = hint;
+            if (Logic.GraphRAG.GraphRAGManager.Instance.IsEntityDiscovered("herb_migu"))
+                hints.Add("借迷谷辨路");
+            hints.Add("向雾外试探前进");
+        }
 
-            // 步骤 B: 模拟点击发送按钮
-            if (mainPanel.sendButton != null)
-            {
-                Debug.Log($"发送建议行动: {hint}");
-                mainPanel.sendButton.onClick.Invoke();
-            }
-            else
-            {
-                Debug.LogError("MainGamePanel 上的 SendButton 没绑定！无法发送。");
-            }
+        if (!string.IsNullOrWhiteSpace(envState.locationName) && envState.locationName.Contains("招摇山"))
+        {
+            hints.Add("观察山壁草木");
+            hints.Add("采集祝余");
+        }
+
+        if (envState.HasClue("deep_path_opened"))
+            hints.Add("观察异光来源");
+
+        if (envState.HasClue("aberration_triggered") || envState.HasTag("异象迫近"))
+            hints.Add("留意异兽踪迹");
+
+        if (state?.attributes != null && state.attributes.currentMana <= state.attributes.maxMana / 2)
+            hints.Add("调息恢复灵力");
+
+        if (hints.Count < 3)
+            hints.Add("留意异兽踪迹");
+        if (hints.Count < 3)
+            hints.Add("查看随身行囊");
+        if (hints.Count < 3)
+            hints.Add("辨认前方地势");
+
+        return hints
+            .Where(hint => !string.IsNullOrWhiteSpace(hint))
+            .Distinct()
+            .Take(3)
+            .ToList();
+    }
+
+    private void ApplyHintsToButtons(List<string> hints)
+    {
+        for (int i = 0; i < actionBtns.Length; i++)
+        {
+            bool hasHint = hints != null && i < hints.Count;
+            if (actionBtns[i] != null)
+                actionBtns[i].gameObject.SetActive(hasHint);
+
+            if (hasHint && actionTexts != null && i < actionTexts.Length && actionTexts[i] != null)
+                actionTexts[i].text = hints[i];
+        }
+    }
+
+    private void SetLoading(bool isLoading)
+    {
+        if (loadingObj != null)
+            loadingObj.SetActive(isLoading);
+
+        if (!isLoading || actionBtns == null)
+            return;
+
+        foreach (var button in actionBtns)
+        {
+            if (button != null)
+                button.gameObject.SetActive(false);
+        }
+    }
+
+    private void ApplyHint(string hint)
+    {
+        AudioMgr.Instance?.PlayClickSfx();
+
+        var mainPanel = UIMgr.Instance.GetPanel<MainGamePanel>() ?? FindObjectOfType<MainGamePanel>();
+        if (mainPanel == null)
+        {
+            Debug.LogError("场景里找不到 MainGamePanel，无法发送建议行动。");
+            HideMe();
+            return;
+        }
+
+        if (mainPanel.inputField != null)
+            mainPanel.inputField.text = hint;
+
+        if (mainPanel.sendButton != null)
+        {
+            Debug.Log($"发送建议行动: {hint}");
+            mainPanel.sendButton.onClick.Invoke();
         }
         else
         {
-            // 如果两种方法都找不到，那就是真的没了
-            Debug.LogError("严重错误：场景里找不到 MainGamePanel！请检查它是否被激活。");
+            Debug.LogError("MainGamePanel 的 sendButton 未绑定，无法发送建议行动。");
         }
 
-        // 关闭建议面板
         HideMe();
+    }
+
+    private void NotifyMainPanel(string message)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+            return;
+
+        var mainPanel = UIMgr.Instance.GetPanel<MainGamePanel>() ?? FindObjectOfType<MainGamePanel>();
+        if (mainPanel != null)
+            mainPanel.AppendText($"<color=#C58F2B>【建议系统】{message}</color>", false);
     }
 }

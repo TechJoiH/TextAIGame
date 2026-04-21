@@ -4,11 +4,22 @@ using StateData.Environment;
 using Logic.Intent;
 using LitJson;
 using System.Text.RegularExpressions;
+using System;
 using System.Collections.Generic;
 
 public class IARProcessor : MonoSingleton<IARProcessor>
 {
-    // ĞĞ¶¯ÏûºÄ±í
+    private static readonly HashSet<string> AllowedCommandKeys = new HashSet<string>
+    {
+        "hp", "mp", "exp", "get_item", "lose_item"
+    };
+
+    private static readonly HashSet<string> AllowedItemKeys = new HashSet<string>
+    {
+        "name", "desc", "count"
+    };
+
+    // è¡ŒåŠ¨æ¶ˆè€—è¡¨
     private static readonly Dictionary<ActionType, ActionCost> ActionCosts = new Dictionary<ActionType, ActionCost>
     {
         { ActionType.Attack, new ActionCost { manaCost = 5, healthRisk = true } },
@@ -18,10 +29,14 @@ public class IARProcessor : MonoSingleton<IARProcessor>
         { ActionType.Rest, new ActionCost { manaCost = 0, requiresSafety = true } },
     };
 
-    // ÊÜ»·¾³Ó°ÏìµÄ¼¼ÄÜ±êÇ©
-    private static readonly HashSet<string> FireSkills = new HashSet<string> { "»ğ", "Ñæ", "Ñ×", "ÁÒ", "×Æ", "È¼" };
-    private static readonly HashSet<string> WindSkills = new HashSet<string> { "·ç", "Æø", "Ğı", "á°" };
-    private static readonly HashSet<string> LightSkills = new HashSet<string> { "¹â", "Ã÷", "Ò«", "»Ô", "Ñô" };
+    // å—ç¯å¢ƒå½±å“çš„æŠ€èƒ½æ ‡ç­¾
+    private static readonly HashSet<string> FireSkills = new HashSet<string> { "ç«", "ç„°", "ç‚", "çƒˆ", "ç¼", "ç‡ƒ" };
+    private static readonly HashSet<string> WindSkills = new HashSet<string> { "é£", "æ°”", "æ—‹", "å²š" };
+    private static readonly HashSet<string> LightSkills = new HashSet<string> { "å…‰", "æ˜", "è€€", "è¾‰", "é˜³" };
+
+    private const string ZhuyuItemName = "ç¥ä½™";
+    private const string MiguItemName = "è¿·è°·";
+    private const string HealPotionName = "æ²»ç–—è¯æ°´";
 
     private struct ActionCost
     {
@@ -31,46 +46,54 @@ public class IARProcessor : MonoSingleton<IARProcessor>
     }
 
     /// <summary>
-    /// 1. ÒâÍ¼Ê¶±ğ + ĞĞ¶¯ºÏ·¨ĞÔĞ£Ñé (Ö§³Ö»·¾³ÒòËØ)
+    /// 1. æ„å›¾è¯†åˆ« + è¡ŒåŠ¨åˆæ³•æ€§æ ¡éªŒ (æ”¯æŒç¯å¢ƒå› ç´ )
     /// </summary>
     public bool CheckActionValidity(string inputAction, RoleState currentState, EnvironmentState envState, out string failReason, out IntentResult intent)
     {
         failReason = "";
         intent = IntentRecognizer.Instance.Recognize(inputAction);
-        envState = envState ?? EnvironmentState.GetDefault();
+        return CheckActionValidity(intent, currentState, envState, out failReason);
+    }
 
-        // ÉúËÀ×´Ì¬¼ì²é
+    public bool CheckActionValidity(IntentResult intent, RoleState currentState, EnvironmentState envState, out string failReason)
+    {
+        failReason = "";
+        intent ??= new IntentResult();
+        envState = envState ?? EnvironmentState.GetDefault();
+        envState.EnsureCollections();
+
+        // ç”Ÿæ­»çŠ¶æ€æ£€æŸ¥
         if (currentState.attributes.currentHealth <= 0)
         {
-            failReason = "ÄãµÄÉíÌåÒÑ¾­ÎŞ·¨Ö§³ÅÈÎºÎĞĞ¶¯£¬ÒâÊ¶½¥½¥³ÁÈëºÚ°µ...";
+            failReason = "ä½ çš„èº«ä½“å·²ç»æ— æ³•æ”¯æ’‘ä»»ä½•è¡ŒåŠ¨ï¼Œæ„è¯†æ¸æ¸æ²‰å…¥é»‘æš—...";
             currentState.runtime.isAlive = false;
             return false;
         }
 
-        // ¸ù¾İ¶¯×÷ÀàĞÍ½øĞĞÌØ¶¨Ğ£Ñé
+        // æ ¹æ®åŠ¨ä½œç±»å‹è¿›è¡Œç‰¹å®šæ ¡éªŒ
         if (!ValidateActionByType(intent, currentState, out failReason))
             return false;
 
-        // ¡ï »·¾³ÒòËØĞ£Ñé ¡ï
+        // â˜… ç¯å¢ƒå› ç´ æ ¡éªŒ â˜…
         if (!ValidateActionByEnvironment(intent, envState, out failReason))
             return false;
 
-        // ÁéÁ¦¼ì²é
+        // çµåŠ›æ£€æŸ¥
         if (ActionCosts.TryGetValue(intent.actionType, out var cost))
         {
             if (currentState.attributes.currentMana < cost.manaCost)
             {
-                failReason = $"ÁéÁ¦²»×ã£¬ÎŞ·¨Ö´ĞĞ´ËĞĞ¶¯£¨ĞèÒª {cost.manaCost}£¬µ±Ç° {currentState.attributes.currentMana}£©";
+                failReason = $"çµåŠ›ä¸è¶³ï¼Œæ— æ³•æ‰§è¡Œæ­¤è¡ŒåŠ¨ï¼ˆéœ€è¦ {cost.manaCost}ï¼Œå½“å‰ {currentState.attributes.currentMana}ï¼‰";
                 return false;
             }
         }
 
-        // ±ôËÀ×´Ì¬ÏŞÖÆ
+        // æ¿’æ­»çŠ¶æ€é™åˆ¶
         if (currentState.runtime.isCriticalState)
         {
             if (intent.actionType == ActionType.Attack || intent.actionType == ActionType.UseSkill)
             {
-                failReason = "ÉËÊÆ¹ıÖØ£¬ÉíÌå²»ÔÊĞí½øĞĞÈç´Ë¼¤ÁÒµÄĞĞ¶¯...";
+                failReason = "ä¼¤åŠ¿è¿‡é‡ï¼Œèº«ä½“ä¸å…è®¸è¿›è¡Œå¦‚æ­¤æ¿€çƒˆçš„è¡ŒåŠ¨...";
                 return false;
             }
         }
@@ -79,61 +102,66 @@ public class IARProcessor : MonoSingleton<IARProcessor>
     }
 
     /// <summary>
-    /// ¼æÈİ¾É°æµ÷ÓÃ£¨ÎŞ»·¾³²ÎÊı£©
+    /// å…¼å®¹æ—§ç‰ˆè°ƒç”¨ï¼ˆæ— ç¯å¢ƒå‚æ•°ï¼‰
     /// </summary>
     public bool CheckActionValidity(string inputAction, RoleState currentState, out string failReason, out IntentResult intent)
     {
         return CheckActionValidity(inputAction, currentState, null, out failReason, out intent);
     }
 
+    public bool CheckActionValidity(IntentResult intent, RoleState currentState, out string failReason)
+    {
+        return CheckActionValidity(intent, currentState, null, out failReason);
+    }
+
     /// <summary>
-    /// ¡ï »·¾³ÒòËØĞ£ÑéÂß¼­ ¡ï
+    /// â˜… ç¯å¢ƒå› ç´ æ ¡éªŒé€»è¾‘ â˜…
     /// </summary>
     private bool ValidateActionByEnvironment(IntentResult intent, EnvironmentState env, out string failReason)
     {
         failReason = "";
 
-        // ¼¼ÄÜ/¹¥»÷ÊÜ»·¾³Ó°Ïì
+        // æŠ€èƒ½/æ”»å‡»å—ç¯å¢ƒå½±å“
         if (intent.actionType == ActionType.UseSkill || intent.actionType == ActionType.Attack)
         {
             string skillName = intent.parameters.ContainsKey("skill_name")
                 ? intent.parameters["skill_name"]
                 : intent.targetEntity ?? "";
 
-            // ÓêÌì/³±Êª»·¾³£º»ğÏµ·¨ÊõĞ§¹ûÏ÷Èõ»òÊ§Ğ§
+            // é›¨å¤©/æ½®æ¹¿ç¯å¢ƒï¼šç«ç³»æ³•æœ¯æ•ˆæœå‰Šå¼±æˆ–å¤±æ•ˆ
             if (env.isWet && ContainsAnyTag(skillName, FireSkills))
             {
-                failReason = "ÓêË®½şÍ¸ÁËÁéÆø£¬»ğÑæÊõ·¨µÄÍşÁ¦±»´ó·ùÏ÷Èõ£¬»ğĞÇÔÚÖ¸¼âÕõÔú×ÅÏ¨Ãğ...";
+                failReason = "é›¨æ°´æµ¸é€äº†çµæ°”ï¼Œç«ç„°æœ¯æ³•çš„å¨åŠ›è¢«å¤§å¹…å‰Šå¼±ï¼Œç«æ˜Ÿåœ¨æŒ‡å°–æŒ£æ‰ç€ç†„ç­...";
                 return false;
             }
 
-            // ´ó·ç»·¾³£º·çÏµ·¨ÊõÔöÇ¿£¬µ«¾«Ï¸¿ØÖÆÀ§ÄÑ
+            // å¤§é£ç¯å¢ƒï¼šé£ç³»æ³•æœ¯å¢å¼ºï¼Œä½†ç²¾ç»†æ§åˆ¶å›°éš¾
             if (env.isWindy && ContainsAnyTag(skillName, WindSkills))
             {
-                // ²»×èÖ¹£¬µ«Ìí¼Ó±ê¼ÇÈÃºóĞø´¦ÀíÖªµÀ
+                // ä¸é˜»æ­¢ï¼Œä½†æ·»åŠ æ ‡è®°è®©åç»­å¤„ç†çŸ¥é“
                 intent.parameters["env_boost_wind"] = "true";
             }
 
-            // ºÚ°µ»·¾³£º¹âÏµ·¨Êõ¸üÃ÷ÏÔ£¬µ«±©Â¶Î»ÖÃ
+            // é»‘æš—ç¯å¢ƒï¼šå…‰ç³»æ³•æœ¯æ›´æ˜æ˜¾ï¼Œä½†æš´éœ²ä½ç½®
             if (env.isDark && ContainsAnyTag(skillName, LightSkills))
             {
                 intent.parameters["env_exposure"] = "true";
             }
         }
 
-        // ÃÔÎí»·¾³£ºÌ½Ë÷/ÒÆ¶¯¿ÉÄÜÃÔÊ§·½Ïò
+        // è¿·é›¾ç¯å¢ƒï¼šæ¢ç´¢/ç§»åŠ¨å¯èƒ½è¿·å¤±æ–¹å‘
         if (env.isFoggy && (intent.actionType == ActionType.Move || intent.actionType == ActionType.Explore))
         {
             intent.parameters["env_fog_risk"] = "true";
         }
 
-        // ºÚ°µ»·¾³£º¹Û²ìĞ§¹ûÊÜÏŞ
+        // é»‘æš—ç¯å¢ƒï¼šè§‚å¯Ÿæ•ˆæœå—é™
         if (env.isDark && intent.actionType == ActionType.Observe)
         {
             intent.parameters["env_vision_limited"] = "true";
         }
 
-        // ³±Êª»·¾³£ºĞİÏ¢»Ö¸´Ğ§¹û½µµÍ
+        // æ½®æ¹¿ç¯å¢ƒï¼šä¼‘æ¯æ¢å¤æ•ˆæœé™ä½
         if (env.isWet && intent.actionType == ActionType.Rest)
         {
             intent.parameters["env_damp_rest"] = "true";
@@ -143,7 +171,7 @@ public class IARProcessor : MonoSingleton<IARProcessor>
     }
 
     /// <summary>
-    /// ¼ì²é¼¼ÄÜÃûÊÇ·ñ°üº¬ÌØ¶¨±êÇ©
+    /// æ£€æŸ¥æŠ€èƒ½åæ˜¯å¦åŒ…å«ç‰¹å®šæ ‡ç­¾
     /// </summary>
     private bool ContainsAnyTag(string skillName, HashSet<string> tags)
     {
@@ -156,7 +184,7 @@ public class IARProcessor : MonoSingleton<IARProcessor>
     }
 
     /// <summary>
-    /// ¸ù¾İ¶¯×÷ÀàĞÍ½øĞĞÌØ¶¨Ğ£Ñé
+    /// æ ¹æ®åŠ¨ä½œç±»å‹è¿›è¡Œç‰¹å®šæ ¡éªŒ
     /// </summary>
     private bool ValidateActionByType(IntentResult intent, RoleState state, out string failReason)
     {
@@ -170,7 +198,7 @@ public class IARProcessor : MonoSingleton<IARProcessor>
                     if (state.equipment.inventory == null || 
                         !state.equipment.inventory.Exists(i => i.Contains(intent.targetEntity)))
                     {
-                        failReason = $"Äã·­±éĞĞÄÒ£¬È´Ã»ÓĞÕÒµ½¡¸{intent.targetEntity}¡¹...";
+                        failReason = $"ä½ ç¿»éè¡Œå›Šï¼Œå´æ²¡æœ‰æ‰¾åˆ°ã€Œ{intent.targetEntity}ã€...";
                         return false;
                     }
                 }
@@ -185,7 +213,7 @@ public class IARProcessor : MonoSingleton<IARProcessor>
                 {
                     if (!state.equipment.equippedSkills.Exists(s => s.Contains(skillName)))
                     {
-                        failReason = $"ÄãÉĞÎ´Ï°µÃ¡¸{skillName}¡¹ÕâÃÅ¹¦·¨...";
+                        failReason = $"ä½ å°šæœªä¹ å¾—ã€Œ{skillName}ã€è¿™é—¨åŠŸæ³•...";
                         return false;
                     }
                 }
@@ -203,37 +231,38 @@ public class IARProcessor : MonoSingleton<IARProcessor>
     }
 
     /// <summary>
-    /// 2. È·¶¨ĞÔÂß¼­Ö´ĞĞ (Ö§³Ö»·¾³ĞŞÕı)
+    /// 2. ç¡®å®šæ€§é€»è¾‘æ‰§è¡Œ (æ”¯æŒç¯å¢ƒä¿®æ­£)
     /// </summary>
     public string ExecuteDeterministicLogic(string inputAction, RoleState currentState, EnvironmentState envState, IntentResult intent)
     {
         var results = new List<string>();
         envState = envState ?? EnvironmentState.GetDefault();
+        envState.EnsureCollections();
 
-        // ÁéÁ¦ÏûºÄ
+        // çµåŠ›æ¶ˆè€—
         if (ActionCosts.TryGetValue(intent.actionType, out var cost) && cost.manaCost > 0)
         {
             currentState.attributes.currentMana -= cost.manaCost;
-            results.Add($"ÁéÁ¦ÏûºÄ: -{cost.manaCost}");
+            results.Add($"çµåŠ›æ¶ˆè€—: -{cost.manaCost}");
         }
 
-        // ¸ù¾İ¶¯×÷ÀàĞÍÉú³É±¾µØ²Ã¾ö½á¹û
+        // æ ¹æ®åŠ¨ä½œç±»å‹ç”Ÿæˆæœ¬åœ°è£å†³ç»“æœ
         string verdict = GenerateLocalVerdict(intent, currentState, envState);
         if (!string.IsNullOrEmpty(verdict))
             results.Add(verdict);
 
-        // ¸üĞÂ±ôËÀ×´Ì¬
+        // æ›´æ–°æ¿’æ­»çŠ¶æ€
         float healthPercent = (float)currentState.attributes.currentHealth / currentState.attributes.maxHealth;
         currentState.runtime.isCriticalState = healthPercent <= 0.2f;
 
         if (results.Count == 0)
-            return "[ÏµÍ³ĞĞ¶¯ÒÑÍ¨¹ıIARĞ£Ñé£¬µÈ´ıĞğÊÂÉú³É...]";
+            return "[ç³»ç»Ÿè¡ŒåŠ¨å·²é€šè¿‡IARæ ¡éªŒï¼Œç­‰å¾…å™äº‹ç”Ÿæˆ...]";
 
-        return $"[±¾µØ²Ã¾ö] {string.Join(" | ", results)}";
+        return $"[æœ¬åœ°è£å†³] {string.Join(" | ", results)}";
     }
 
     /// <summary>
-    /// ¼æÈİ¾É°æµ÷ÓÃ
+    /// å…¼å®¹æ—§ç‰ˆè°ƒç”¨
     /// </summary>
     public string ExecuteDeterministicLogic(string inputAction, RoleState currentState, IntentResult intent)
     {
@@ -241,7 +270,7 @@ public class IARProcessor : MonoSingleton<IARProcessor>
     }
 
     /// <summary>
-    /// Éú³É±¾µØÂß¼­²Ã¾ö (º¬»·¾³ĞŞÕı)
+    /// ç”Ÿæˆæœ¬åœ°é€»è¾‘è£å†³ (å«ç¯å¢ƒä¿®æ­£)
     /// </summary>
     private string GenerateLocalVerdict(IntentResult intent, RoleState state, EnvironmentState env)
     {
@@ -249,56 +278,262 @@ public class IARProcessor : MonoSingleton<IARProcessor>
         {
             case ActionType.Attack:
                 int baseAtk = state.attributes.strength + (string.IsNullOrEmpty(state.equipment.weapon) ? 0 : 10);
-                // ³±Êª»·¾³ÎïÀí¹¥»÷ÂÔÎ¢ÊÜ×è
+                // æ½®æ¹¿ç¯å¢ƒç‰©ç†æ”»å‡»ç•¥å¾®å—é˜»
                 if (env.isWet)
                 {
                     baseAtk = Mathf.Max(1, baseAtk - 2);
-                    return $"¹¥»÷»ù´¡ÉËº¦È·ÈÏ£¬»ù´¡¹¥»÷: {baseAtk} (³±Êª»·¾³-2)";
+                    return $"æ”»å‡»åŸºç¡€ä¼¤å®³ç¡®è®¤ï¼ŒåŸºç¡€æ”»å‡»: {baseAtk} (æ½®æ¹¿ç¯å¢ƒ-2)";
                 }
-                return $"¹¥»÷»ù´¡ÉËº¦È·ÈÏ£¬»ù´¡¹¥»÷: {baseAtk}";
+                return $"æ”»å‡»åŸºç¡€ä¼¤å®³ç¡®è®¤ï¼ŒåŸºç¡€æ”»å‡»: {baseAtk}";
 
             case ActionType.Defend:
-                return "½øÈë·ÀÓù×ËÌ¬£¬ÉËº¦¼õÃâÉúĞ§";
+                return "è¿›å…¥é˜²å¾¡å§¿æ€ï¼Œä¼¤å®³å‡å…ç”Ÿæ•ˆ";
 
             case ActionType.Rest:
                 int healAmount = Mathf.Min(10, state.attributes.maxHealth - state.attributes.currentHealth);
-                // ³±Êª»·¾³ĞİÏ¢Ğ§¹û¼õ°ë
+                // æ½®æ¹¿ç¯å¢ƒä¼‘æ¯æ•ˆæœå‡åŠ
                 if (env.isWet || intent.parameters.ContainsKey("env_damp_rest"))
                 {
                     healAmount = Mathf.Max(1, healAmount / 2);
                     state.attributes.currentHealth += healAmount;
-                    return $"ĞİÏ¢»Ö¸´ÉúÃü: +{healAmount} (³±Êª»·¾³Ğ§¹û¼õ°ë)";
+                    return $"ä¼‘æ¯æ¢å¤ç”Ÿå‘½: +{healAmount} (æ½®æ¹¿ç¯å¢ƒæ•ˆæœå‡åŠ)";
                 }
                 state.attributes.currentHealth += healAmount;
-                return $"ĞİÏ¢»Ö¸´ÉúÃü: +{healAmount}";
+                return $"ä¼‘æ¯æ¢å¤ç”Ÿå‘½: +{healAmount}";
 
             case ActionType.Cultivate:
                 int manaRecover = Mathf.Min(15, state.attributes.maxMana - state.attributes.currentMana);
                 state.attributes.currentMana += manaRecover;
-                return $"ĞŞÁ¶»Ö¸´ÁéÁ¦: +{manaRecover}";
+                return $"ä¿®ç‚¼æ¢å¤çµåŠ›: +{manaRecover}";
+
+            case ActionType.UseItem:
+                return HandleUseItem(intent, state, env);
 
             case ActionType.Observe:
-                if (env.isDark || intent.parameters.ContainsKey("env_vision_limited"))
-                    return "¹Û²ìĞĞ¶¯£ºÊÓÒ°ÊÜÏŞ£¬AIÓ¦ÃèÊöºÚ°µÖĞµÄ¸Ğ¹ÙÏ¸½Ú";
-                if (env.isFoggy)
-                    return "¹Û²ìĞĞ¶¯£ºÃÔÎíÕÚ±Î£¬AIÓ¦ÃèÊöëüëÊÄ£ºıµÄ¾°Ïó";
-                return "¹Û²ìĞĞ¶¯£ºAIÓ¦Ìá¹©ÖÜÎ§»·¾³Ï¸½Ú";
+                return HandleObserve(state, env, intent);
+
+            case ActionType.Collect:
+                return HandleCollect(intent, state, env);
 
             case ActionType.Move:
-                string dir = intent.parameters.ContainsKey("direction") ? intent.parameters["direction"] : "Ç°·½";
-                if (intent.parameters.ContainsKey("env_fog_risk"))
-                    return $"ÒÆ¶¯·½Ïò: {dir} (ÃÔÎíÖĞ¿ÉÄÜÃÔÊ§)";
-                return $"ÒÆ¶¯·½Ïò: {dir}";
+            case ActionType.Explore:
+                return HandleTraversal(intent, state, env);
 
             default:
                 return null;
         }
     }
 
-    // ========== ±£ÁôÔ­ÓĞµÄ AI ÏìÓ¦½âÎöÂß¼­ ==========
+    private string HandleObserve(RoleState state, EnvironmentState env, IntentResult intent)
+    {
+        var results = new List<string>();
+
+        if (env.isDark || intent.parameters.ContainsKey("env_vision_limited"))
+            results.Add("è§‚å¯Ÿè¡ŒåŠ¨ï¼šè§†é‡å—é™ï¼Œåº”èšç„¦é»‘æš—ä¸­çš„ç»†å¾®å£°å“ä¸è§¦æ„Ÿ");
+        else if (env.isFoggy)
+            results.Add("è§‚å¯Ÿè¡ŒåŠ¨ï¼šè¿·é›¾é®è”½ï¼Œåº”æå†™è´´åœ°æ¸¸èµ°çš„é›¾ä¸ä¸è‹¥éšè‹¥ç°çš„è½®å»“");
+        else
+            results.Add("è§‚å¯Ÿè¡ŒåŠ¨ï¼šAIåº”æä¾›å‘¨å›´ç¯å¢ƒç»†èŠ‚");
+
+        if (IsInZhaoYao(env) && !env.HasClue("herbs_spotted"))
+        {
+            env.AddClue("herbs_spotted");
+            env.AddTag("çµè‰è¸ªè¿¹");
+            env.currentObjective = "é‡‡é›†ç¥ä½™æˆ–è¿·è°·ï¼Œä¸ºç»§ç»­æ·±å…¥æ‹›æ‘‡å±±è¿·é›¾åšå‡†å¤‡ã€‚";
+            Logic.GraphRAG.GraphRAGManager.Instance.DiscoverEntity("herb_zhuyu");
+            Logic.GraphRAG.GraphRAGManager.Instance.DiscoverEntity("herb_migu");
+            results.Add("å±±å£æ½®ç—•ä¹‹é—´æ˜¾å‡ºç¥ä½™ä¸è¿·è°·çš„ç—•è¿¹");
+        }
+        else if (env.HasClue("deep_path_opened") && !env.HasClue("aberration_foretold"))
+        {
+            env.AddClue("aberration_foretold");
+            env.AddTag("é’ç™½å¼‚å…‰");
+            env.currentObjective = "ç›¯ç´§å¼‚å…‰æºå¤´ï¼Œè°¨æ…åˆ¤æ–­æ˜¯å¦æœ‰å¼‚å…½é€¼è¿‘ã€‚";
+            results.Add("é›¾åæœ‰é’ç™½å¼‚å…‰é—ªç­ï¼Œæ—é—´ä¼¼æœ‰å¼‚å…½å•¼å“");
+        }
+
+        return string.Join("ï¼›", results);
+    }
+
+    private string HandleCollect(IntentResult intent, RoleState state, EnvironmentState env)
+    {
+        string targetName = ResolveTargetName(intent);
+        if (string.IsNullOrWhiteSpace(targetName))
+        {
+            if (env.HasClue("herbs_spotted") && !env.HasClue("zhuyu_collected"))
+                targetName = ZhuyuItemName;
+            else if (env.HasClue("herbs_spotted") && !env.HasClue("migu_collected"))
+                targetName = MiguItemName;
+        }
+
+        if (ContainsText(targetName, ZhuyuItemName))
+        {
+            AddInventoryItem(state, ZhuyuItemName);
+            Logic.GraphRAG.GraphRAGManager.Instance.DiscoverEntity("herb_zhuyu");
+            env.AddClue("zhuyu_collected");
+            env.AddTag("ç¥ä½™å·²é‡‡");
+            env.currentObjective = env.HasClue("migu_collected")
+                ? "å€Ÿè¿·è°·è¾¨è·¯ï¼Œç»§ç»­å‘æ‹›æ‘‡å±±æ·±å¤„æ¢ç´¢ã€‚"
+                : "ç»§ç»­è¾¨è®¤è¿·è°·ï¼Œå‡†å¤‡åœ¨è¿·é›¾ä¸­ç¨³å®šå‰è¿›ã€‚";
+            AddExperience(state, 8);
+            return "é‡‡å¾—ä¸€æ ªç¥ä½™å¹¶æ”¶å…¥è¡Œå›Šï¼Œç»éªŒ +8";
+        }
+
+        if (ContainsText(targetName, MiguItemName))
+        {
+            AddInventoryItem(state, MiguItemName);
+            Logic.GraphRAG.GraphRAGManager.Instance.DiscoverEntity("herb_migu");
+            env.AddClue("migu_collected");
+            env.AddTag("è¿·è°·åœ¨æ‰‹");
+            env.RemoveTag("è¿·å¤±æ–¹å‘");
+            env.currentObjective = "å€Ÿè¿·è°·è¾¨è·¯ï¼Œç»§ç»­å‘æ‹›æ‘‡å±±æ·±å¤„æ¢ç´¢ã€‚";
+            AddExperience(state, 10);
+            return "é‡‡å¾—è¿·è°·ï¼Œå¯å€Ÿå…¶è¾¨æ¸…é›¾ä¸­è·¯å¾„ï¼Œç»éªŒ +10";
+        }
+
+        return "é‡‡é›†åŠ¨ä½œå·²ç¡®è®¤ï¼Œä½†æš‚æœªå‘½ä¸­å…³é”®çµè‰";
+    }
+
+    private string HandleUseItem(IntentResult intent, RoleState state, EnvironmentState env)
+    {
+        string targetName = ResolveTargetName(intent);
+
+        if (ContainsText(targetName, HealPotionName) && ConsumeInventoryItem(state, HealPotionName))
+        {
+            int healAmount = Mathf.Min(18, state.attributes.maxHealth - state.attributes.currentHealth);
+            state.attributes.currentHealth += healAmount;
+            env.AddTag("è¯æ°”å›æš–");
+            return $"æœä¸‹æ²»ç–—è¯æ°´ï¼Œç”Ÿå‘½æ¢å¤: +{healAmount}";
+        }
+
+        if (ContainsText(targetName, ZhuyuItemName) && ConsumeInventoryItem(state, ZhuyuItemName))
+        {
+            int healAmount = Mathf.Min(6, state.attributes.maxHealth - state.attributes.currentHealth);
+            int manaAmount = Mathf.Min(6, state.attributes.maxMana - state.attributes.currentMana);
+            state.attributes.currentHealth += healAmount;
+            state.attributes.currentMana += manaAmount;
+            env.AddTag("è…¹ä¸­æœ‰å®");
+            env.currentObjective = "ä½“åŠ›ç¨å®šï¼Œå¯ä»¥ç»§ç»­è§‚å¯Ÿæˆ–æ·±å…¥è¿·é›¾ã€‚";
+            return $"å’½ä¸‹ç¥ä½™åæ°”æ¯ç¨å®šï¼Œç”Ÿå‘½ +{healAmount}ï¼ŒçµåŠ› +{manaAmount}";
+        }
+
+        if (ContainsText(targetName, MiguItemName) && HasInventoryItem(state, MiguItemName))
+        {
+            env.RemoveTag("è¿·å¤±æ–¹å‘");
+            env.AddTag("è¿·è°·æŒ‡è·¯");
+            env.currentObjective = "æ²¿é›¾å¾„æ·±å…¥ï¼Œè§‚å¯Ÿé’ç™½å¼‚å…‰çš„æ¥æºã€‚";
+            return "ä½©ä¸Šè¿·è°·åï¼Œé›¾ä¸­çš„è·¯å¾„è½®å»“é€æ¸æ¸…æ™°";
+        }
+
+        return "ä½¿ç”¨ç‰©å“åŠ¨ä½œå·²ç¡®è®¤ï¼ŒAIåº”æå†™å™¨ç‰©è§¦æ„Ÿä¸èº«ä½“åé¦ˆ";
+    }
+
+    private string HandleTraversal(IntentResult intent, RoleState state, EnvironmentState env)
+    {
+        string direction = intent.parameters.ContainsKey("direction") ? intent.parameters["direction"] : "å‰æ–¹";
+
+        if (env.isFoggy && !HasInventoryItem(state, MiguItemName) && !env.HasClue("migu_collected"))
+        {
+            state.attributes.currentHealth = Mathf.Max(1, state.attributes.currentHealth - 3);
+            env.AddTag("è¿·å¤±æ–¹å‘");
+            env.currentObjective = "å…ˆå¯»æ‰¾è¿·è°·æˆ–ç»§ç»­è§‚å¯Ÿå±±å£ï¼Œä»¥å…åœ¨é›¾ä¸­æŠ˜è¿”ã€‚";
+            return $"æœ{direction}è¯•æ¢æ—¶è¢«è¿·é›¾é€¼å›ï¼Œç˜´æ°”ä¾µä½“ï¼Œç”Ÿå‘½ -3";
+        }
+
+        if (IsInZhaoYao(env) && !env.HasClue("deep_path_opened"))
+        {
+            env.locationName = "æ‹›æ‘‡å±±Â·é›¾å¾„æ·±å¤„";
+            env.narrativeHint = "è¿·è°·æ˜ å¾—é›¾ä¸åˆ†å±‚ï¼Œå±±è…¹æ·±å¤„çš„é’ç™½å¼‚å…‰æ—¶æ˜æ—¶ç­ï¼Œæ—é—´å¶æœ‰å°–å•¼æ è¿‡ã€‚";
+            env.isFoggy = false;
+            env.AddClue("deep_path_opened");
+            env.AddTag("é›¾å¾„å·²æ˜");
+            env.AddTag("å¼‚å…½è¸ªè¿¹");
+            env.currentObjective = "æ²¿å¼‚å…‰ç»§ç»­æ¢ç´¢ï¼Œå‡†å¤‡åº”å¯¹å¯èƒ½çš„å¼‚è±¡æˆ–å¼‚å…½ã€‚";
+            return $"å€ŸåŠ©çº¿ç´¢æœ{direction}æ·±å…¥ï¼ŒæˆåŠŸç©¿è¿‡é›¾å¾„ï¼Œå¹¶æ•æ‰åˆ°å¼‚å…½æ´»åŠ¨ç—•è¿¹";
+        }
+
+        if (env.HasClue("deep_path_opened") && !env.HasClue("aberration_triggered"))
+        {
+            env.AddClue("aberration_triggered");
+            env.AddTag("å¼‚è±¡è¿«è¿‘");
+            env.currentObjective = "è§‚å¯Ÿå¼‚å…‰æ¥æºï¼Œè°¨æ…å‡†å¤‡è¿æ¥é­é‡ã€‚";
+            return $"æœ{direction}å†è¿›ä¸€æ­¥ï¼Œå‰æ–¹é’ç™½å¼‚å…‰éª¤ç„¶é€¼è¿‘ï¼Œé­é‡å·²ç»ä¸´è¿‘";
+        }
+
+        return $"ç§»åŠ¨æ–¹å‘: {direction}";
+    }
+
+    private static bool IsInZhaoYao(EnvironmentState env)
+    {
+        return env != null &&
+               (!string.IsNullOrWhiteSpace(env.locationId) && env.locationId.Contains("zhaoyao", StringComparison.OrdinalIgnoreCase) ||
+                !string.IsNullOrWhiteSpace(env.locationName) && env.locationName.Contains("æ‹›æ‘‡å±±", StringComparison.Ordinal));
+    }
+
+    private static string ResolveTargetName(IntentResult intent)
+    {
+        if (intent == null)
+            return string.Empty;
+
+        if (!string.IsNullOrWhiteSpace(intent.targetEntity))
+            return intent.targetEntity;
+
+        if (intent.parameters != null)
+        {
+            if (intent.parameters.TryGetValue("item_name", out string itemName) && !string.IsNullOrWhiteSpace(itemName))
+                return itemName;
+            if (intent.parameters.TryGetValue("skill_name", out string skillName) && !string.IsNullOrWhiteSpace(skillName))
+                return skillName;
+        }
+
+        return string.Empty;
+    }
+
+    private static bool ContainsText(string source, string keyword)
+    {
+        return !string.IsNullOrWhiteSpace(source) &&
+               !string.IsNullOrWhiteSpace(keyword) &&
+               source.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0;
+    }
+
+    private static void AddInventoryItem(RoleState state, string itemName)
+    {
+        state.equipment.inventory ??= new List<string>();
+        state.equipment.inventory.Add(itemName);
+    }
+
+    private static bool HasInventoryItem(RoleState state, string itemName)
+    {
+        return state.equipment.inventory != null &&
+               state.equipment.inventory.Exists(item => ContainsText(item, itemName));
+    }
+
+    private static bool ConsumeInventoryItem(RoleState state, string itemName)
+    {
+        if (state.equipment.inventory == null)
+            return false;
+
+        int index = state.equipment.inventory.FindIndex(item => ContainsText(item, itemName));
+        if (index < 0)
+            return false;
+
+        state.equipment.inventory.RemoveAt(index);
+        return true;
+    }
+
+    private void AddExperience(RoleState state, int amount)
+    {
+        if (amount <= 0)
+            return;
+
+        state.attributes.currentExp += amount;
+        CheckLevelUp(state);
+    }
+
+    // ========== ä¿ç•™åŸæœ‰çš„ AI å“åº”è§£æé€»è¾‘ ==========
 
     /// <summary>
-    /// 3. ½âÎö²¢Ó¦ÓÃ AI ·µ»Ø½á¹û
+    /// 3. è§£æå¹¶åº”ç”¨ AI è¿”å›ç»“æœ
     /// </summary>
     public string AnalyzeAndApplyAIResult(string aiFullResponse, RoleState state)
     {
@@ -310,12 +545,19 @@ public class IARProcessor : MonoSingleton<IARProcessor>
             string jsonCmd = match.Groups[1].Value;
             try
             {
-                ApplyCommandToState(jsonCmd, state);
-                Debug.Log($"<color=cyan>[IAR] ÌáÈ¡²¢Ö´ĞĞÖ¸Áî: {jsonCmd}</color>");
+                if (TryValidateCommandJson(jsonCmd, out string failReason))
+                {
+                    ApplyCommandToState(jsonCmd, state);
+                    Debug.Log($"<color=cyan>[IAR] æå–å¹¶æ‰§è¡ŒæŒ‡ä»¤: {jsonCmd}</color>");
+                }
+                else
+                {
+                    Debug.LogWarning($"[IAR] å·²æ‹’ç»éç™½åå•æŒ‡ä»¤: {failReason} | åŸå§‹æŒ‡ä»¤: {jsonCmd}");
+                }
             }
-            catch (System.Exception e)
+            catch (Exception e)
             {
-                Debug.LogError($"[IAR] Ö¸Áî½âÎöÊ§°Ü: {e.Message}");
+                Debug.LogError($"[IAR] æŒ‡ä»¤è§£æå¤±è´¥: {e.Message}");
             }
 
             return aiFullResponse.Replace(match.Value, "").Trim();
@@ -324,8 +566,86 @@ public class IARProcessor : MonoSingleton<IARProcessor>
         return aiFullResponse;
     }
 
+    public static bool TryValidateCommandJson(string jsonStr, out string failReason)
+    {
+        failReason = null;
+        if (string.IsNullOrWhiteSpace(jsonStr))
+        {
+            failReason = "ç©ºæŒ‡ä»¤";
+            return false;
+        }
+
+        JsonData data;
+        try
+        {
+            data = JsonMapper.ToObject(jsonStr);
+        }
+        catch (Exception exception)
+        {
+            failReason = $"JSON è§£æå¤±è´¥: {exception.Message}";
+            return false;
+        }
+
+        if (data == null || !data.IsObject)
+        {
+            failReason = "é¡¶å±‚å¿…é¡»æ˜¯ JSON å¯¹è±¡";
+            return false;
+        }
+
+        foreach (string key in data.Keys)
+        {
+            if (!AllowedCommandKeys.Contains(key))
+            {
+                failReason = $"å­˜åœ¨æœªæˆæƒå­—æ®µ: {key}";
+                return false;
+            }
+        }
+
+        if (data.Keys.Contains("get_item"))
+        {
+            JsonData itemData = data["get_item"];
+            if (itemData == null || !itemData.IsObject)
+            {
+                failReason = "get_item å¿…é¡»æ˜¯å¯¹è±¡";
+                return false;
+            }
+
+            foreach (string itemKey in itemData.Keys)
+            {
+                if (!AllowedItemKeys.Contains(itemKey))
+                {
+                    failReason = $"get_item å­˜åœ¨æœªæˆæƒå­—æ®µ: {itemKey}";
+                    return false;
+                }
+            }
+
+            if (!itemData.Keys.Contains("name") || itemData["name"] == null || string.IsNullOrWhiteSpace((string)itemData["name"]))
+            {
+                failReason = "get_item ç¼ºå°‘ name";
+                return false;
+            }
+
+            if (itemData.Keys.Contains("count") && TryReadInt(itemData["count"], out int count) && count <= 0)
+            {
+                failReason = "get_item.count å¿…é¡»å¤§äº 0";
+                return false;
+            }
+        }
+
+        if (data.Keys.Contains("lose_item"))
+        {
+            if (data["lose_item"] == null || string.IsNullOrWhiteSpace((string)data["lose_item"]))
+            {
+                failReason = "lose_item å¿…é¡»æ˜¯éç©ºå­—ç¬¦ä¸²";
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     /// <summary>
-    /// Ö´ĞĞ¾ßÌåÊıÖµ±ä¸ü
+    /// æ‰§è¡Œå…·ä½“æ•°å€¼å˜æ›´
     /// </summary>
     private void ApplyCommandToState(string jsonStr, RoleState state)
     {
@@ -333,7 +653,7 @@ public class IARProcessor : MonoSingleton<IARProcessor>
 
         if (data.Keys.Contains("hp"))
         {
-            int val = (int)data["hp"];
+            int val = ReadInt(data["hp"]);
             state.attributes.currentHealth += val;
             state.attributes.currentHealth = Mathf.Clamp(state.attributes.currentHealth, 0, state.attributes.maxHealth);
             
@@ -345,14 +665,14 @@ public class IARProcessor : MonoSingleton<IARProcessor>
 
         if (data.Keys.Contains("mp"))
         {
-            int val = (int)data["mp"];
+            int val = ReadInt(data["mp"]);
             state.attributes.currentMana += val;
             state.attributes.currentMana = Mathf.Clamp(state.attributes.currentMana, 0, state.attributes.maxMana);
         }
 
         if (data.Keys.Contains("exp"))
         {
-            int val = (int)data["exp"];
+            int val = ReadInt(data["exp"]);
             state.attributes.currentExp += val;
             CheckLevelUp(state);
         }
@@ -361,10 +681,12 @@ public class IARProcessor : MonoSingleton<IARProcessor>
         {
             JsonData itemData = data["get_item"];
             string itemName = (string)itemData["name"];
+            int itemCount = itemData.Keys.Contains("count") ? Mathf.Max(1, ReadInt(itemData["count"])) : 1;
             if (state.equipment.inventory == null)
                 state.equipment.inventory = new System.Collections.Generic.List<string>();
-            state.equipment.inventory.Add(itemName);
-            Debug.Log($"<color=yellow>[IAR] »ñµÃÎïÆ·: {itemName}</color>");
+            for (int i = 0; i < itemCount; i++)
+                state.equipment.inventory.Add(itemName);
+            Debug.Log($"<color=yellow>[IAR] è·å¾—ç‰©å“: {itemName} x{itemCount}</color>");
         }
 
         if (data.Keys.Contains("lose_item"))
@@ -374,8 +696,52 @@ public class IARProcessor : MonoSingleton<IARProcessor>
         }
     }
 
+    private static int ReadInt(JsonData data)
+    {
+        return TryReadInt(data, out int value) ? value : 0;
+    }
+
+    private static bool TryReadInt(JsonData data, out int value)
+    {
+        value = 0;
+        if (data == null)
+            return false;
+
+        try
+        {
+            if (data.IsInt)
+            {
+                value = (int)data;
+                return true;
+            }
+
+            if (data.IsLong)
+            {
+                value = Convert.ToInt32((long)data);
+                return true;
+            }
+
+            if (data.IsDouble)
+            {
+                value = Convert.ToInt32((double)data);
+                return true;
+            }
+
+            if (data.IsString)
+            {
+                return int.TryParse((string)data, out value);
+            }
+        }
+        catch
+        {
+            return false;
+        }
+
+        return false;
+    }
+
     /// <summary>
-    /// ¼ì²éÉı¼¶
+    /// æ£€æŸ¥å‡çº§
     /// </summary>
     private void CheckLevelUp(RoleState state)
     {
@@ -389,7 +755,7 @@ public class IARProcessor : MonoSingleton<IARProcessor>
             state.attributes.expToNextLevel = (int)(state.attributes.expToNextLevel * 1.5f);
             state.attributes.maxHealth += 20;
             state.attributes.maxMana += 10;
-            Debug.Log($"<color=magenta>[IAR] Éı¼¶! µ±Ç°µÈ¼¶: {state.attributes.level}</color>");
+            Debug.Log($"<color=magenta>[IAR] å‡çº§! å½“å‰ç­‰çº§: {state.attributes.level}</color>");
         }
     }
 }

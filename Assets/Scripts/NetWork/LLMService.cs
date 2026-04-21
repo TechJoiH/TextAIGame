@@ -1,19 +1,31 @@
 using System;
 using System.Collections;
+using System.IO;
 using System.Text;
+using System.Text.RegularExpressions;
 using UnityEngine;
 using UnityEngine.Networking;
 using LitJson;
 
 /// <summary>
-/// LLM ·şÎñ£¨NVIDIA Integrate ChatCompletions£©
-/// Ö§³ÖÁ÷Ê½Êä³öºÍ¶àÂÖ¶Ô»°¼ÇÒä
+/// LLM æœåŠ¡ï¼ˆOpenAI Compatibleï¼‰
+/// æ”¯æŒæµå¼è¾“å‡ºã€é…ç½®åŒ–æ¥å£ä¸æ¼”ç¤ºå…œåº•ã€‚
 /// </summary>
 public class LLMService : MonoSingleton<LLMService>
 {
-    private const string API_URL = "https://integrate.api.nvidia.com/v1/chat/completions";
-    private const string API_KEY = "Bearer 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";
-    private const string MODEL_NAME = "meta/llama-3.1-70b-instruct";
+    private const string ConfigFileName = "llm_config.json";
+    private const string DefaultConfigResourcePath = "Configs/llm_config";
+
+    [Serializable]
+    public class LLMConfig
+    {
+        public string provider = "openai-compatible";
+        public string baseUrl = "https://integrate.api.nvidia.com/v1/chat/completions";
+        public string model = "meta/llama-3.1-70b-instruct";
+        public string apiKey = "";
+        public bool stream = true;
+        public int timeoutSeconds = 45;
+    }
 
     [Serializable]
     public class RequestPayload
@@ -32,65 +44,85 @@ public class LLMService : MonoSingleton<LLMService>
         public string content;
     }
 
-    private int consecutiveFailures = 0;
-    private const int MAX_FAILURES = 3;
+    private LLMConfig _config;
 
-    /// <summary>
-    /// ·¢ÆğÁ÷Ê½ÇëÇó£¨¼ò»¯°æ£¬¼æÈİ¾É½Ó¿Ú£©
-    /// </summary>
-    public void PostStream(string systemPrompt, string userPrompt, Action<string> onTokenReceived, Action onComplete)
+    public bool HasUsableRemoteConfig =>
+        _config != null &&
+        !string.IsNullOrWhiteSpace(_config.baseUrl) &&
+        !string.IsNullOrWhiteSpace(_config.model) &&
+        !string.IsNullOrWhiteSpace(_config.apiKey);
+
+    protected override void Awake()
+    {
+        base.Awake();
+        ReloadConfig();
+    }
+
+    public void ReloadConfig()
+    {
+        _config = LoadConfig();
+    }
+
+    public void PostStream(string systemPrompt, string userPrompt, Action<string> onTokenReceived, Action onComplete, Action<string> onStatus = null)
     {
         var messages = new[]
         {
             new Message { role = "system", content = systemPrompt },
             new Message { role = "user", content = userPrompt }
         };
-        
-        StartCoroutine(RequestRoutine(messages, onTokenReceived, onComplete));
+
+        StartCoroutine(RequestRoutine(messages, onTokenReceived, onComplete, onStatus));
     }
 
-    /// <summary>
-    /// ·¢ÆğÁ÷Ê½ÇëÇó£¨Ö§³ÖÍêÕûÏûÏ¢Êı×é£¬ÓÃÓÚ¶àÂÖ¶Ô»°£©
-    /// </summary>
-    public void PostStreamWithMessages(Message[] messages, Action<string> onTokenReceived, Action onComplete)
+    public void PostStreamWithMessages(Message[] messages, Action<string> onTokenReceived, Action onComplete, Action<string> onStatus = null)
     {
-        StartCoroutine(RequestRoutine(messages, onTokenReceived, onComplete));
+        StartCoroutine(RequestRoutine(messages, onTokenReceived, onComplete, onStatus));
     }
 
-    /// <summary>
-    /// ·¢Æğ·ÇÁ÷Ê½ÇëÇó£¨ÓÃÓÚÕªÒªÉú³ÉµÈ³¡¾°£©
-    /// </summary>
-    public void PostNonStream(string systemPrompt, string userPrompt, Action<string> onComplete)
+    public void PostNonStream(string systemPrompt, string userPrompt, Action<string> onComplete, Action<string> onStatus = null)
     {
         var messages = new[]
         {
             new Message { role = "system", content = systemPrompt },
             new Message { role = "user", content = userPrompt }
         };
-        
-        StartCoroutine(NonStreamRequestRoutine(messages, onComplete));
+
+        StartCoroutine(NonStreamRequestRoutine(messages, onComplete, onStatus));
     }
 
-    private IEnumerator RequestRoutine(Message[] messages, Action<string> onToken, Action onComplete)
+    private IEnumerator RequestRoutine(Message[] messages, Action<string> onToken, Action onComplete, Action<string> onStatus)
     {
+        ReloadConfig();
+
+        if (!HasUsableRemoteConfig)
+        {
+            onStatus?.Invoke("æœªæ£€æµ‹åˆ°å¯ç”¨æ¨¡å‹é…ç½®ï¼Œå·²åˆ‡æ¢ä¸ºæœ¬åœ°æ¼”ç¤ºå™äº‹ã€‚");
+            onToken?.Invoke(BuildDemoNarrative(messages));
+            onComplete?.Invoke();
+            yield break;
+        }
+
+        bool useStreaming = _config.stream;
         var payload = new RequestPayload
         {
-            model = MODEL_NAME,
+            model = _config.model,
             messages = messages,
-            stream = true
+            stream = useStreaming
         };
 
         string json = JsonMapper.ToJson(payload);
         byte[] bodyRaw = Encoding.UTF8.GetBytes(json);
 
-        using (var request = new UnityWebRequest(API_URL, UnityWebRequest.kHttpVerbPOST))
+        using (var request = new UnityWebRequest(_config.baseUrl, UnityWebRequest.kHttpVerbPOST))
         {
             request.uploadHandler = new UploadHandlerRaw(bodyRaw);
             request.downloadHandler = new DownloadHandlerBuffer();
+            request.timeout = Mathf.Clamp(_config.timeoutSeconds, 5, 120);
 
             request.SetRequestHeader("Content-Type", "application/json");
-            request.SetRequestHeader("Authorization", API_KEY);
-            request.SetRequestHeader("Accept", "text/event-stream");
+            request.SetRequestHeader("Authorization", BuildAuthorizationHeader(_config.apiKey));
+            if (useStreaming)
+                request.SetRequestHeader("Accept", "text/event-stream");
 
             var operation = request.SendWebRequest();
             int lastDataIndex = 0;
@@ -99,95 +131,90 @@ public class LLMService : MonoSingleton<LLMService>
             {
                 yield return null;
 
+                if (!useStreaming)
+                    continue;
+
                 string currentText = request.downloadHandler.text;
                 if (string.IsNullOrEmpty(currentText) || currentText.Length <= lastDataIndex)
                     continue;
 
                 string newData = currentText.Substring(lastDataIndex);
                 lastDataIndex = currentText.Length;
-
                 ProcessStreamData(newData, onToken);
             }
 
-            // ´¦ÀíÊ£ÓàÊı¾İ
-            string finalText = request.downloadHandler.text;
-            if (!string.IsNullOrEmpty(finalText) && finalText.Length > lastDataIndex)
+            if (request.result == UnityWebRequest.Result.Success)
             {
-                string newData = finalText.Substring(lastDataIndex);
-                ProcessStreamData(newData, onToken);
-            }
-
-            // ´íÎó´¦ÀíÓë½µ¼¶
-            if (request.result != UnityWebRequest.Result.Success)
-            {
-                consecutiveFailures++;
-                Debug.LogError($"[LLM API Error]: {request.error}");
-                
-                if (consecutiveFailures >= MAX_FAILURES)
+                if (useStreaming)
                 {
-                    onToken?.Invoke(GetFallbackResponse());
-                    consecutiveFailures = 0;
+                    string finalText = request.downloadHandler.text;
+                    if (!string.IsNullOrEmpty(finalText) && finalText.Length > lastDataIndex)
+                    {
+                        string newData = finalText.Substring(lastDataIndex);
+                        ProcessStreamData(newData, onToken);
+                    }
                 }
                 else
                 {
-                    onToken?.Invoke($"[Á¬½ÓÊ§°Ü£¬ÕıÔÚÖØÊÔ... ({consecutiveFailures}/{MAX_FAILURES})]");
+                    string content = ExtractNonStreamContent(request.downloadHandler.text);
+                    if (!string.IsNullOrWhiteSpace(content))
+                        onToken?.Invoke(content);
                 }
             }
             else
             {
-                consecutiveFailures = 0;
+                Debug.LogError($"[LLM API Error]: {request.error}");
+                onStatus?.Invoke($"ç½‘ç»œè¯·æ±‚å¤±è´¥ï¼ˆ{request.error}ï¼‰ï¼Œå·²åˆ‡æ¢ä¸ºæœ¬åœ°æ¼”ç¤ºå™äº‹ã€‚");
+                onToken?.Invoke(BuildDemoNarrative(messages));
             }
         }
 
         onComplete?.Invoke();
     }
 
-    private IEnumerator NonStreamRequestRoutine(Message[] messages, Action<string> onComplete)
+    private IEnumerator NonStreamRequestRoutine(Message[] messages, Action<string> onComplete, Action<string> onStatus)
     {
+        ReloadConfig();
+
+        if (!HasUsableRemoteConfig)
+        {
+            onStatus?.Invoke("æœªæ£€æµ‹åˆ°å¯ç”¨æ¨¡å‹é…ç½®ï¼Œæœ¬æ¬¡è¯·æ±‚æ”¹èµ°æœ¬åœ°è§„åˆ™å…œåº•ã€‚");
+            onComplete?.Invoke(null);
+            yield break;
+        }
+
         var payload = new RequestPayload
         {
-            model = MODEL_NAME,
+            model = _config.model,
             messages = messages,
             stream = false,
-            max_tokens = 256  // ÕªÒªÓÃ½Ï¶ÌµÄTokenÏŞÖÆ
+            max_tokens = 256
         };
 
         string json = JsonMapper.ToJson(payload);
         byte[] bodyRaw = Encoding.UTF8.GetBytes(json);
 
-        using (var request = new UnityWebRequest(API_URL, UnityWebRequest.kHttpVerbPOST))
+        using (var request = new UnityWebRequest(_config.baseUrl, UnityWebRequest.kHttpVerbPOST))
         {
             request.uploadHandler = new UploadHandlerRaw(bodyRaw);
             request.downloadHandler = new DownloadHandlerBuffer();
+            request.timeout = Mathf.Clamp(_config.timeoutSeconds, 5, 120);
 
             request.SetRequestHeader("Content-Type", "application/json");
-            request.SetRequestHeader("Authorization", API_KEY);
+            request.SetRequestHeader("Authorization", BuildAuthorizationHeader(_config.apiKey));
 
             yield return request.SendWebRequest();
 
             if (request.result == UnityWebRequest.Result.Success)
             {
-                try
-                {
-                    JsonData data = JsonMapper.ToObject(request.downloadHandler.text);
-                    if (data != null && data.Keys.Contains("choices") && data["choices"].Count > 0)
-                    {
-                        string content = (string)data["choices"][0]["message"]["content"];
-                        onComplete?.Invoke(content);
-                        yield break;
-                    }
-                }
-                catch (Exception e)
-                {
-                    Debug.LogError($"[LLM] ½âÎöÏìÓ¦Ê§°Ü: {e.Message}");
-                }
+                onComplete?.Invoke(ExtractNonStreamContent(request.downloadHandler.text));
             }
             else
             {
                 Debug.LogError($"[LLM API Error]: {request.error}");
+                onStatus?.Invoke($"ç½‘ç»œè¯·æ±‚å¤±è´¥ï¼ˆ{request.error}ï¼‰ï¼Œæœ¬æ¬¡è¯·æ±‚å·²å›é€€ã€‚");
+                onComplete?.Invoke(null);
             }
-
-            onComplete?.Invoke(null);
         }
     }
 
@@ -207,7 +234,8 @@ public class LLMService : MonoSingleton<LLMService>
             try
             {
                 JsonData data = JsonMapper.ToObject(jsonStr);
-                if (data == null) continue;
+                if (data == null)
+                    continue;
 
                 if (data.IsObject && data.Keys.Contains("choices") && data["choices"] != null && data["choices"].Count > 0)
                 {
@@ -226,19 +254,189 @@ public class LLMService : MonoSingleton<LLMService>
             }
             catch
             {
-                // ¸ñÊ½´íÎó»ò½Ø¶ÏJSON£¬µÈ´ıÏÂÒ»Ö¡¼ÌĞø´¦Àí
+                // æµå¼æ•°æ®å¯èƒ½è¢«åˆ‡æ–­ï¼Œç­‰å¾…ä¸‹ä¸€æ®µè¡¥å…¨ã€‚
             }
         }
     }
 
-    private string GetFallbackResponse()
+    private static string BuildAuthorizationHeader(string apiKey)
     {
-        string[] fallbacks = new[]
+        if (string.IsNullOrWhiteSpace(apiKey))
+            return string.Empty;
+
+        return apiKey.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
+            ? apiKey
+            : $"Bearer {apiKey}";
+    }
+
+    private LLMConfig LoadConfig()
+    {
+        string configPath = Path.Combine(Application.streamingAssetsPath, ConfigFileName);
+        if (File.Exists(configPath))
         {
-            "ËÄÖÜÎíÆøÃÖÂş£¬ÄãÔİÊ±ÎŞ·¨¿´ÇåÇ°Â·¡­¡­£¨ÍøÂçÁ¬½Ó²»ÎÈ¶¨£©",
-            "Ò»ÕóÑ£ÔÎÏ®À´£¬ÒâÊ¶ÔİÊ±ÏİÈë»ìãç¡­¡­£¨ÕıÔÚÖØĞÂÁ¬½Ó£©",
-            "É½·çºôĞ¥£¬ËÆºõÓĞÊ²Ã´×è¶ÏÁËÄãÓëÌìµØµÄÁªÏµ¡­¡­£¨ÇëÉÔºóÖØÊÔ£©"
-        };
-        return fallbacks[UnityEngine.Random.Range(0, fallbacks.Length)];
+            try
+            {
+                return JsonUtility.FromJson<LLMConfig>(File.ReadAllText(configPath));
+            }
+            catch (Exception exception)
+            {
+                Debug.LogError($"[LLM] è¯»å–æœ¬åœ°é…ç½®å¤±è´¥: {exception.Message}");
+            }
+        }
+
+        TextAsset fallbackAsset = Resources.Load<TextAsset>(DefaultConfigResourcePath);
+        if (fallbackAsset != null && !string.IsNullOrWhiteSpace(fallbackAsset.text))
+        {
+            try
+            {
+                return JsonUtility.FromJson<LLMConfig>(fallbackAsset.text);
+            }
+            catch (Exception exception)
+            {
+                Debug.LogError($"[LLM] è¯»å–é»˜è®¤é…ç½®å¤±è´¥: {exception.Message}");
+            }
+        }
+
+        return new LLMConfig();
+    }
+
+    private string ExtractNonStreamContent(string responseText)
+    {
+        if (string.IsNullOrWhiteSpace(responseText))
+            return null;
+
+        try
+        {
+            JsonData data = JsonMapper.ToObject(responseText);
+            if (data != null && data.Keys.Contains("choices") && data["choices"].Count > 0)
+            {
+                return (string)data["choices"][0]["message"]["content"];
+            }
+        }
+        catch (Exception exception)
+        {
+            Debug.LogError($"[LLM] è§£æå“åº”å¤±è´¥: {exception.Message}");
+        }
+
+        return null;
+    }
+
+    private string BuildDemoNarrative(Message[] messages)
+    {
+        string userPrompt = ExtractLatestUserContent(messages);
+        string playerInput = ExtractSection(userPrompt, "=== ğŸ‘¤ ç©å®¶åŸå§‹è¾“å…¥ ===");
+        string logicResult = ExtractSection(userPrompt, "=== âš–ï¸ æœ¬åœ°é€»è¾‘è£å†³ ===");
+        string knowledgeSection = ExtractSection(userPrompt, "=== ğŸ“š GraphRAG-Lite çŸ¥è¯†ä¸Šä¸‹æ–‡ ===");
+        string location = ExtractJsonField(userPrompt, "locationName");
+
+        string knowledgeLine = BuildKnowledgeLine(knowledgeSection);
+        string logicLine = BuildLogicLine(logicResult);
+        string place = SanitizeVisibleText(string.IsNullOrWhiteSpace(location) ? "æ­¤åœ°" : location);
+        string safeInput = SanitizeVisibleText(playerInput);
+
+        var builder = new StringBuilder();
+        builder.Append($"{place}é—´ï¼Œæ½®æ¹¿çš„å±±é£è£¹ç€è–„é›¾ç¼“ç¼“æ¸¸èµ°ã€‚");
+
+        if (!string.IsNullOrWhiteSpace(safeInput))
+            builder.Append($"ä½ ä¾ç€æœ¬èƒ½å°è¯•{safeInput}ï¼Œ");
+        else
+            builder.Append("ä½ å±ä½æ°”æ¯ï¼Œé¡ºç€çœ¼å‰çš„æ°”å‘³ä¸é£å£°æ‘¸ç´¢ï¼Œ");
+
+        builder.Append(logicLine);
+
+        if (!string.IsNullOrWhiteSpace(knowledgeLine))
+            builder.Append(knowledgeLine);
+
+        builder.Append("å‘¨å›´çš„ä¸€åˆ‡éƒ½æ²¡æœ‰ç«‹åˆ»ç»™å‡ºç­”æ¡ˆï¼ŒåªæŠŠæ›´æ·±çš„å¼‚æ ·æ„Ÿç¼“ç¼“æ¨åˆ°ä½ é¢å‰ã€‚");
+        return SanitizeVisibleText(builder.ToString());
+    }
+
+    private static string ExtractLatestUserContent(Message[] messages)
+    {
+        if (messages == null)
+            return string.Empty;
+
+        for (int i = messages.Length - 1; i >= 0; i--)
+        {
+            if (messages[i] != null && messages[i].role == "user")
+                return messages[i].content ?? string.Empty;
+        }
+
+        return string.Empty;
+    }
+
+    private static string ExtractSection(string source, string marker)
+    {
+        if (string.IsNullOrWhiteSpace(source) || string.IsNullOrWhiteSpace(marker))
+            return string.Empty;
+
+        int startIndex = source.IndexOf(marker, StringComparison.Ordinal);
+        if (startIndex < 0)
+            return string.Empty;
+
+        startIndex += marker.Length;
+        string tail = source.Substring(startIndex).Trim();
+        int nextSectionIndex = tail.IndexOf("\n===", StringComparison.Ordinal);
+        return nextSectionIndex >= 0 ? tail.Substring(0, nextSectionIndex).Trim() : tail.Trim();
+    }
+
+    private static string ExtractJsonField(string source, string fieldName)
+    {
+        if (string.IsNullOrWhiteSpace(source) || string.IsNullOrWhiteSpace(fieldName))
+            return string.Empty;
+
+        Match match = Regex.Match(source, $"\"{fieldName}\"\\s*:\\s*\"([^\"]+)\"");
+        return match.Success ? match.Groups[1].Value : string.Empty;
+    }
+
+    private static string BuildKnowledgeLine(string knowledgeSection)
+    {
+        if (string.IsNullOrWhiteSpace(knowledgeSection) || knowledgeSection.Contains("æœªå‘½ä¸­ç›´æ¥ç›¸å…³æ¡ç›®"))
+            return string.Empty;
+
+        MatchCollection matches = Regex.Matches(knowledgeSection, @"â—†\s*([^\sï¼ˆ]+)");
+        if (matches.Count == 0)
+            return string.Empty;
+
+        var names = new StringBuilder();
+        for (int i = 0; i < matches.Count && i < 2; i++)
+        {
+            if (i > 0)
+                names.Append('ã€');
+            names.Append(matches[i].Groups[1].Value);
+        }
+
+        return SanitizeVisibleText($"è„‘æµ·é‡Œå¿½ç„¶æµ®èµ·å…³äº{names}çš„å±±æµ·æ—§é—»ï¼Œåƒæ˜¯åœ¨æé†’ä½ çœ¼å‰è¿™ä¸€æ­¥å¹¶ä¸æ˜¯æ¯«æ— æ¥å†çš„è½æ’ã€‚");
+    }
+
+    private static string BuildLogicLine(string logicResult)
+    {
+        if (string.IsNullOrWhiteSpace(logicResult))
+            return "åŠ¨ä½œæš‚æ—¶æ²¡æœ‰è§¦å‘é¢å¤–æ•°å€¼å˜åŒ–ï¼Œåªæœ‰å‘¼å¸ã€è„šæ­¥ä¸è§†çº¿åœ¨ç¼“æ…¢æ¨è¿›ã€‚";
+
+        if (logicResult.Contains("è§‚å¯Ÿ"))
+            return "ä½ çš„æ³¨æ„åŠ›è¢«è¿«æ”¾å¾—æ›´ç»†ï¼Œå²©ç¼ã€æ°´æ±½å’Œæ ‘å½±éƒ½åƒåœ¨å‘ä½ åéœ²æŸç§è¿Ÿç¼“çš„è®¯å·ã€‚";
+        if (logicResult.Contains("ç§»åŠ¨"))
+            return "è„šä¸‹çš„çŸ³åœŸä¸æ½®æ°”ä¸æ–­è¯•æ¢ä½ çš„é‡å¿ƒï¼Œæ¯ä¸€æ­¥éƒ½åƒæ˜¯åœ¨é›¾é‡Œé‡æ–°ç¡®è®¤æ–¹å‘ã€‚";
+        if (logicResult.Contains("çµåŠ›æ¶ˆè€—"))
+            return "çµåŠ›è¢«ç‰µåŠ¨æ—¶ï¼Œèƒ¸è…”æ·±å¤„åƒæ˜¯æœ‰å¾®çƒ­çš„çº¿è¢«ç”Ÿç”Ÿæ‹½èµ°ï¼Œå‘¼å¸ä¹Ÿè·Ÿç€å‘ç´§ã€‚";
+
+        return "å±€åŠ¿ä¾æ—§æ²¿ç€æœ¬åœ°è£å†³çš„ç»“æœæ¨è¿›ï¼Œèº«ä½“å…ˆäºå¿µå¤´æ„Ÿåˆ°äº†é‚£ä¸€ç‚¹ç»†å¾®çš„å˜åŒ–ã€‚";
+    }
+
+    public static string SanitizeVisibleText(string rawText)
+    {
+        if (string.IsNullOrWhiteSpace(rawText))
+            return string.Empty;
+
+        string sanitized = rawText;
+        sanitized = Regex.Replace(sanitized, @"<CMD>.*?</CMD>", string.Empty, RegexOptions.Singleline);
+        sanitized = Regex.Replace(sanitized, @"```[\s\S]*?```", string.Empty, RegexOptions.Singleline);
+        sanitized = Regex.Replace(sanitized, @"(?m)^\s*(===|---).*$", string.Empty);
+        sanitized = Regex.Replace(sanitized, @"(?i)\b(data|json|delta|message|choices|content)\b\s*[:=]\s*.*", string.Empty);
+        sanitized = Regex.Replace(sanitized, @"[A-Fa-f0-9]{32,}", string.Empty);
+        sanitized = Regex.Replace(sanitized, @"[A-Za-z0-9+/=_-]{48,}", string.Empty);
+        sanitized = Regex.Replace(sanitized, @"\n{3,}", "\n\n");
+        return sanitized.Trim();
     }
 }

@@ -1,0 +1,8 @@
+{
+  "provider": "openai-compatible",
+  "baseUrl": "https://integrate.api.nvidia.com/v1/chat/completions",
+  "model": "meta/llama-3.1-70b-instruct",
+  "apiKey": "Bearer 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",
+  "stream": true,
+  "timeoutSeconds": 45
+}

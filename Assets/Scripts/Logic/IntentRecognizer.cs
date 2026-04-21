@@ -8,37 +8,37 @@ using LitJson;
 namespace Logic.Intent
 {
     /// <summary>
-    /// ĞĞ¶¯ÀàĞÍÃ¶¾Ù - ±ê×¼»¯ĞĞÎªÖ¸Áî
+    /// è¡ŒåŠ¨ç±»å‹æšä¸¾ - æ ‡å‡†åŒ–è¡Œä¸ºæŒ‡ä»¤
     /// </summary>
     public enum ActionType
     {
-        Unknown,        // Î´Ê¶±ğ
-        Attack,         // ¹¥»÷Àà
-        Defend,         // ·ÀÓùÀà
-        Move,           // ÒÆ¶¯Àà
-        Explore,        // Ì½Ë÷Àà
-        UseItem,        // Ê¹ÓÃÎïÆ·
-        UseSkill,       // Ê¹ÓÃ¼¼ÄÜ
-        Talk,           // ¶Ô»°½»»¥
-        Rest,           // ĞİÏ¢»Ö¸´
-        Observe,        // ¹Û²ì²é¿´
-        Collect,        // ²É¼¯ÊÕ¼¯
-        Craft,          // ÖÆ×÷ºÏ³É
-        Cultivate       // ĞŞÁ¶´ò×ø
+        Unknown,        // æœªè¯†åˆ«
+        Attack,         // æ”»å‡»ç±»
+        Defend,         // é˜²å¾¡ç±»
+        Move,           // ç§»åŠ¨ç±»
+        Explore,        // æ¢ç´¢ç±»
+        UseItem,        // ä½¿ç”¨ç‰©å“
+        UseSkill,       // ä½¿ç”¨æŠ€èƒ½
+        Talk,           // å¯¹è¯äº¤äº’
+        Rest,           // ä¼‘æ¯æ¢å¤
+        Observe,        // è§‚å¯ŸæŸ¥çœ‹
+        Collect,        // é‡‡é›†æ”¶é›†
+        Craft,          // åˆ¶ä½œåˆæˆ
+        Cultivate       // ä¿®ç‚¼æ‰“å
     }
 
     /// <summary>
-    /// ÒâÍ¼Ê¶±ğ½á¹û
+    /// æ„å›¾è¯†åˆ«ç»“æœ
     /// </summary>
     [Serializable]
     public class IntentResult
     {
         public ActionType actionType;
-        public string targetEntity;      // Ä¿±êÊµÌå£¨¹ÖÎïÃû/ÎïÆ·Ãû/µØµãµÈ£©
-        public string actionVerb;        // Ô­Ê¼¶¯´Ê
-        public float confidence;         // ÖÃĞÅ¶È 0~1
-        public Dictionary<string, string> parameters; // ¸½¼Ó²ÎÊı
-        public string recognitionSource; // Ê¶±ğÀ´Ô´: "rule" / "semantic" / "llm"
+        public string targetEntity;      // ç›®æ ‡å®ä½“ï¼ˆæ€ªç‰©å/ç‰©å“å/åœ°ç‚¹ç­‰ï¼‰
+        public string actionVerb;        // åŸå§‹åŠ¨è¯
+        public float confidence;         // ç½®ä¿¡åº¦ 0~1
+        public Dictionary<string, string> parameters; // é™„åŠ å‚æ•°
+        public string recognitionSource; // è¯†åˆ«æ¥æº: "rule" / "semantic" / "llm"
 
         public IntentResult()
         {
@@ -50,109 +50,109 @@ namespace Logic.Intent
 
         public override string ToString()
         {
-            return $"[ÒâÍ¼: {actionType}, Ä¿±ê: {targetEntity ?? "ÎŞ"}, ÖÃĞÅ¶È: {confidence:P0}, À´Ô´: {recognitionSource}]";
+            return $"[æ„å›¾: {actionType}, ç›®æ ‡: {targetEntity ?? "æ— "}, ç½®ä¿¡åº¦: {confidence:P0}, æ¥æº: {recognitionSource}]";
         }
     }
 
     /// <summary>
-    /// ÒâÍ¼Ê¶±ğ¹æÔòÀà
+    /// æ„å›¾è¯†åˆ«è§„åˆ™ç±»
     /// </summary>
     [Serializable]
     public class IntentRule
     {
         public ActionType actionType;
-        public string[] keywords;        // ¹Ø¼ü´ÊÁĞ±í
-        public string[] semanticPatterns; // ÓïÒåÄ£Ê½£¨Ö§³ÖÄ£ºıÆ¥Åä£©
-        public string regexPattern;      // ÕıÔòÄ£Ê½£¨¿ÉÑ¡£¬ÓÃÓÚ¾«È·Æ¥Åä£©
-        public int priority;             // ÓÅÏÈ¼¶£¨ÊıÖµÔ½´óÓÅÏÈ¼¶Ô½¸ß£©
+        public string[] keywords;        // å…³é”®è¯åˆ—è¡¨
+        public string[] semanticPatterns; // è¯­ä¹‰æ¨¡å¼ï¼ˆæ”¯æŒæ¨¡ç³ŠåŒ¹é…ï¼‰
+        public string regexPattern;      // æ­£åˆ™æ¨¡å¼ï¼ˆå¯é€‰ï¼Œç”¨äºç²¾ç¡®åŒ¹é…ï¼‰
+        public int priority;             // ä¼˜å…ˆçº§ï¼ˆæ•°å€¼è¶Šå¤§ä¼˜å…ˆçº§è¶Šé«˜ï¼‰
     }
 
     /// <summary>
-    /// ÓïÒåÏàËÆ¶È¼ÆËãÆ÷£¨ÇáÁ¿¼¶±¾µØ·½°¸£©
+    /// è¯­ä¹‰ç›¸ä¼¼åº¦è®¡ç®—å™¨ï¼ˆè½»é‡çº§æœ¬åœ°æ–¹æ¡ˆï¼‰
     /// </summary>
     public class SemanticMatcher
     {
-        // Í¬Òå´Ê´Êµä - À©Õ¹¹Ø¼ü´Ê¸²¸Ç·¶Î§
+        // åŒä¹‰è¯è¯å…¸ - æ‰©å±•å…³é”®è¯è¦†ç›–èŒƒå›´
         private static readonly Dictionary<string, string[]> SynonymDict = new Dictionary<string, string[]>
         {
-            // ¹¥»÷ÀàÍ¬Òå´Ê
-            { "¹¥»÷", new[] { "´ò", "×á", "´·", "Å¹´ò", "³öÊÖ", "¶¯ÊÖ", "ÕĞºô", "ËÅºò", "ÊÕÊ°", "½ÌÑµ", "¸Éµô", "½â¾ö", "ÏûÃğ", "ÅªËÀ", "Ô×ÁË", "¶çÁË" } },
-            // ·ÀÓùÀàÍ¬Òå´Ê
-            { "·ÀÓù", new[] { "µ²", "¸ñ", "»¤", "ÊØ", "¶ã", "ÉÁ", "±Ü", "ÍË", "Ëõ", "¶×ÏÂ", "Å¿ÏÂ", "Òş±Î", "ÕÒÑÚ»¤" } },
-            // ÒÆ¶¯ÀàÍ¬Òå´Ê
-            { "ÒÆ¶¯", new[] { "×ß", "ÅÜ", "ÅÀ", "ÓÎ", "·É", "Ìø", "×ê", "Áï", "´Ü", "ÌÓ", "³·", "ÉÁÈË", "ÅÜÂ·", "¿ªÁï", "³·ÍË", "½Åµ×Ä¨ÓÍ" } },
-            // ¹Û²ìÀàÍ¬Òå´Ê
-            { "¹Û²ì", new[] { "¿´", "ÇÆ", "³ò", "¶¢", "Íû", "ÊÓ", "¶ËÏê", "´òÁ¿", "ÉóÊÓ", "É¨ÊÓ", "»·¹Ë", "ÕÅÍû", "¿úÌ½", "Õì²é", "ËÑÑ°" } },
-            // ĞİÏ¢ÀàÍ¬Òå´Ê
-            { "ĞİÏ¢", new[] { "Ğª", "Í£", "ÌÉ", "×ø", "¿¿", "´­¿ÚÆø", "»ºÒ»»º", "´ò¸öíï", "ÃĞÒ»»á", "Ñø¾«ĞîÈñ", "»Ö¸´ÌåÁ¦" } },
-            // ¶Ô»°ÀàÍ¬Òå´Ê
-            { "¶Ô»°", new[] { "Ëµ", "½²", "ÁÄ", "Ì¸", "ÎÊ", "´ğ", "Ñ¯ÎÊ", "´òÌı", "Ì×»°", "´îÚ¨", "½»Á÷", "¹µÍ¨", "ÉÌÁ¿", "Çë½Ì", "ÖÊÎÊ" } },
-            // Ê¹ÓÃÎïÆ·Í¬Òå´Ê
-            { "Ê¹ÓÃ", new[] { "ÓÃ", "³Ô", "ºÈ", "·ş", "Í¿", "Ä¨", "·ó", "×¢Éä", "ÍÌ·ş", "à¾", "¿Ä", "Õû", "¸ã" } },
-            // ¼¼ÄÜÊ©·ÅÍ¬Òå´Ê
-            { "Ê©·¨", new[] { "·Å", "·¢", "´ò³ö", "Ê©Õ¹", "ÊÍ·Å", "ÔË¹¦", "´ß¶¯", "¼¤·¢", "·¢¶¯", "Ê¹³ö", "¼À³ö", "ÌÍ³ö" } },
-            // ²É¼¯ÀàÍ¬Òå´Ê
-            { "²É¼¯", new[] { "²É", "Õª", "ÍÚ", "¼ñ", "ÀÌ", "ÌÍ", "Ş¶", "ËÑ¹Î", "ÊÕ¸î", "Ê°È¡", "»ñÈ¡" } },
-            // ĞŞÁ¶ÀàÍ¬Òå´Ê
-            { "ĞŞÁ¶", new[] { "Á·", "Á¶", "Îò", "²Î", "Ú¤Ïë", "´ò×ø", "¾²ĞŞ", "±Õ¹Ø", "ÍÂÄÉ", "ÔËÆø", "µ÷Ï¢" } }
+            // æ”»å‡»ç±»åŒä¹‰è¯
+            { "æ”»å‡»", new[] { "æ‰“", "æ", "æ¶", "æ®´æ‰“", "å‡ºæ‰‹", "åŠ¨æ‰‹", "æ‹›å‘¼", "ä¼ºå€™", "æ”¶æ‹¾", "æ•™è®­", "å¹²æ‰", "è§£å†³", "æ¶ˆç­", "å¼„æ­»", "å®°äº†", "å‰äº†" } },
+            // é˜²å¾¡ç±»åŒä¹‰è¯
+            { "é˜²å¾¡", new[] { "æŒ¡", "æ ¼", "æŠ¤", "å®ˆ", "èº²", "é—ª", "é¿", "é€€", "ç¼©", "è¹²ä¸‹", "è¶´ä¸‹", "éšè”½", "æ‰¾æ©æŠ¤" } },
+            // ç§»åŠ¨ç±»åŒä¹‰è¯
+            { "ç§»åŠ¨", new[] { "èµ°", "è·‘", "çˆ¬", "æ¸¸", "é£", "è·³", "é’»", "æºœ", "çªœ", "é€ƒ", "æ’¤", "é—ªäºº", "è·‘è·¯", "å¼€æºœ", "æ’¤é€€", "è„šåº•æŠ¹æ²¹" } },
+            // è§‚å¯Ÿç±»åŒä¹‰è¯
+            { "è§‚å¯Ÿ", new[] { "çœ‹", "ç§", "ç…", "ç›¯", "æœ›", "è§†", "ç«¯è¯¦", "æ‰“é‡", "å®¡è§†", "æ‰«è§†", "ç¯é¡¾", "å¼ æœ›", "çª¥æ¢", "ä¾¦æŸ¥", "æœå¯»", "æ£€æŸ¥" } },
+            // ä¼‘æ¯ç±»åŒä¹‰è¯
+            { "ä¼‘æ¯", new[] { "æ­‡", "åœ", "èºº", "å", "é ", "å–˜å£æ°”", "ç¼“ä¸€ç¼“", "æ‰“ä¸ªç›¹", "çœ¯ä¸€ä¼š", "å…»ç²¾è“„é”", "æ¢å¤ä½“åŠ›" } },
+            // å¯¹è¯ç±»åŒä¹‰è¯
+            { "å¯¹è¯", new[] { "è¯´", "è®²", "èŠ", "è°ˆ", "é—®", "ç­”", "è¯¢é—®", "æ‰“å¬", "å¥—è¯", "æ­è®ª", "äº¤æµ", "æ²Ÿé€š", "å•†é‡", "è¯·æ•™", "è´¨é—®" } },
+            // ä½¿ç”¨ç‰©å“åŒä¹‰è¯
+            { "ä½¿ç”¨", new[] { "ç”¨", "åƒ", "å–", "æœ", "æ¶‚", "æŠ¹", "æ•·", "æ³¨å°„", "åæœ", "å—‘", "ç£•", "æ•´", "æ" } },
+            // æŠ€èƒ½æ–½æ”¾åŒä¹‰è¯
+            { "æ–½æ³•", new[] { "æ”¾", "å‘", "æ‰“å‡º", "æ–½å±•", "é‡Šæ”¾", "è¿åŠŸ", "å‚¬åŠ¨", "æ¿€å‘", "å‘åŠ¨", "ä½¿å‡º", "ç¥­å‡º", "æå‡º" } },
+            // é‡‡é›†ç±»åŒä¹‰è¯
+            { "é‡‡é›†", new[] { "é‡‡", "æ‘˜", "æŒ–", "æ¡", "æ", "æ", "è–…", "æœåˆ®", "æ”¶å‰²", "æ‹¾å–", "è·å–" } },
+            // ä¿®ç‚¼ç±»åŒä¹‰è¯
+            { "ä¿®ç‚¼", new[] { "ç»ƒ", "ç‚¼", "æ‚Ÿ", "å‚", "å†¥æƒ³", "æ‰“å", "é™ä¿®", "é—­å…³", "åçº³", "è¿æ°”", "è°ƒæ¯" } }
         };
 
-        // ÒşÓ÷/¿ÚÓï»¯±í´ïÓ³Éä
+        // éšå–»/å£è¯­åŒ–è¡¨è¾¾æ˜ å°„
         private static readonly Dictionary<string, ActionType> MetaphorMap = new Dictionary<string, ActionType>
         {
-            // ¹¥»÷ÀàÒşÓ÷
-            { "ËÍËûÉÏÂ·", ActionType.Attack },
-            { "ÈÃËû¼û×æ×Ú", ActionType.Attack },
-            { "¸øËûµãÑÕÉ«¿´¿´", ActionType.Attack },
-            { "ÕĞºôËû", ActionType.Attack },
-            { "ËÅºòËû", ActionType.Attack },
-            { "ÊÕÊ°", ActionType.Attack },
-            { "½ÌÑµ", ActionType.Attack },
-            { "¸ÉËû", ActionType.Attack },
-            { "í¡", ActionType.Attack },
-            { "Ã§", ActionType.Attack },
-            { "³å", ActionType.Attack },
-            { "ÉÏ", ActionType.Attack },
+            // æ”»å‡»ç±»éšå–»
+            { "é€ä»–ä¸Šè·¯", ActionType.Attack },
+            { "è®©ä»–è§ç¥–å®—", ActionType.Attack },
+            { "ç»™ä»–ç‚¹é¢œè‰²çœ‹çœ‹", ActionType.Attack },
+            { "æ‹›å‘¼ä»–", ActionType.Attack },
+            { "ä¼ºå€™ä»–", ActionType.Attack },
+            { "æ”¶æ‹¾", ActionType.Attack },
+            { "æ•™è®­", ActionType.Attack },
+            { "å¹²ä»–", ActionType.Attack },
+            { "æ€¼", ActionType.Attack },
+            { "è½", ActionType.Attack },
+            { "å†²", ActionType.Attack },
+            { "ä¸Š", ActionType.Attack },
             
-            // ÒÆ¶¯ÀàÒşÓ÷
-            { "¿ªÁï", ActionType.Move },
-            { "½Åµ×Ä¨ÓÍ", ActionType.Move },
-            { "ÈıÊ®Áù¼Æ", ActionType.Move },
-            { "ÅÜÂ·", ActionType.Move },
-            { "ÉÁÈË", ActionType.Move },
-            { "³·ÍË", ActionType.Move },
-            { "ÁïÖ®´ó¼ª", ActionType.Move },
-            { "ÌÓÖ®Ø²Ø²", ActionType.Move },
+            // ç§»åŠ¨ç±»éšå–»
+            { "å¼€æºœ", ActionType.Move },
+            { "è„šåº•æŠ¹æ²¹", ActionType.Move },
+            { "ä¸‰åå…­è®¡", ActionType.Move },
+            { "è·‘è·¯", ActionType.Move },
+            { "é—ªäºº", ActionType.Move },
+            { "æ’¤é€€", ActionType.Move },
+            { "æºœä¹‹å¤§å‰", ActionType.Move },
+            { "é€ƒä¹‹å¤­å¤­", ActionType.Move },
             
-            // ¹Û²ìÀàÒşÓ÷
-            { "³ò³ò", ActionType.Observe },
-            { "ÇÆÇÆ", ActionType.Observe },
-            { "¿´¿´Çé¿ö", ActionType.Observe },
-            { "´òÌ½", ActionType.Observe },
-            { "ÃşÇå", ActionType.Observe },
+            // è§‚å¯Ÿç±»éšå–»
+            { "ç…ç…", ActionType.Observe },
+            { "ç§ç§", ActionType.Observe },
+            { "çœ‹çœ‹æƒ…å†µ", ActionType.Observe },
+            { "æ‰“æ¢", ActionType.Observe },
+            { "æ‘¸æ¸…", ActionType.Observe },
             
-            // ĞİÏ¢ÀàÒşÓ÷
-            { "´­¿ÚÆø", ActionType.Rest },
-            { "»ºÒ»»º", ActionType.Rest },
-            { "ĞªĞª½Å", ActionType.Rest },
-            { "Ñø¾«ĞîÈñ", ActionType.Rest },
+            // ä¼‘æ¯ç±»éšå–»
+            { "å–˜å£æ°”", ActionType.Rest },
+            { "ç¼“ä¸€ç¼“", ActionType.Rest },
+            { "æ­‡æ­‡è„š", ActionType.Rest },
+            { "å…»ç²¾è“„é”", ActionType.Rest },
             
-            // ¶Ô»°ÀàÒşÓ÷
-            { "Ì×Ì×½üºõ", ActionType.Talk },
-            { "ÁÄÁ½¾ä", ActionType.Talk },
-            { "´ò¸öÕĞºô", ActionType.Talk },
-            { "´îÚ¨", ActionType.Talk },
-            { "Ì×»°", ActionType.Talk },
+            // å¯¹è¯ç±»éšå–»
+            { "å¥—å¥—è¿‘ä¹", ActionType.Talk },
+            { "èŠä¸¤å¥", ActionType.Talk },
+            { "æ‰“ä¸ªæ‹›å‘¼", ActionType.Talk },
+            { "æ­è®ª", ActionType.Talk },
+            { "å¥—è¯", ActionType.Talk },
             
-            // ¼¼ÄÜÀàÒşÓ÷
-            { "·Å´óÕĞ", ActionType.UseSkill },
-            { "±ï´óµÄ", ActionType.UseSkill },
-            { "Ë¦¸ö¼¼ÄÜ", ActionType.UseSkill },
-            { "À´Ò»·¢", ActionType.UseSkill }
+            // æŠ€èƒ½ç±»éšå–»
+            { "æ”¾å¤§æ‹›", ActionType.UseSkill },
+            { "æ†‹å¤§çš„", ActionType.UseSkill },
+            { "ç”©ä¸ªæŠ€èƒ½", ActionType.UseSkill },
+            { "æ¥ä¸€å‘", ActionType.UseSkill }
         };
 
         /// <summary>
-        /// ¼ì²éÊÇ·ñÆ¥ÅäÒşÓ÷±í´ï
+        /// æ£€æŸ¥æ˜¯å¦åŒ¹é…éšå–»è¡¨è¾¾
         /// </summary>
         public static bool TryMatchMetaphor(string input, out ActionType actionType, out float confidence)
         {
@@ -164,7 +164,7 @@ namespace Logic.Intent
                 if (input.Contains(kvp.Key))
                 {
                     actionType = kvp.Value;
-                    confidence = 0.85f; // ÒşÓ÷Æ¥Åä¸øÓè½Ï¸ßÖÃĞÅ¶È
+                    confidence = 0.85f; // éšå–»åŒ¹é…ç»™äºˆè¾ƒé«˜ç½®ä¿¡åº¦
                     return true;
                 }
             }
@@ -172,20 +172,20 @@ namespace Logic.Intent
         }
 
         /// <summary>
-        /// À©Õ¹¹Ø¼ü´ÊÆ¥Åä£¨°üº¬Í¬Òå´Ê£©
+        /// æ‰©å±•å…³é”®è¯åŒ¹é…ï¼ˆåŒ…å«åŒä¹‰è¯ï¼‰
         /// </summary>
         public static bool MatchWithSynonyms(string input, string baseKeyword, out string matchedWord)
         {
             matchedWord = null;
             
-            // ÏÈ¼ì²éÔ­´Ê
+            // å…ˆæ£€æŸ¥åŸè¯
             if (input.Contains(baseKeyword))
             {
                 matchedWord = baseKeyword;
                 return true;
             }
 
-            // ¼ì²éÍ¬Òå´Ê
+            // æ£€æŸ¥åŒä¹‰è¯
             if (SynonymDict.TryGetValue(baseKeyword, out var synonyms))
             {
                 foreach (var synonym in synonyms)
@@ -202,14 +202,14 @@ namespace Logic.Intent
         }
 
         /// <summary>
-        /// ¼ÆËãÓïÒåÏàËÆ¶È£¨»ùÓÚ×Ö·ûÖØµş + Í¬Òå´ÊÀ©Õ¹£©
+        /// è®¡ç®—è¯­ä¹‰ç›¸ä¼¼åº¦ï¼ˆåŸºäºå­—ç¬¦é‡å  + åŒä¹‰è¯æ‰©å±•ï¼‰
         /// </summary>
         public static float CalculateSimilarity(string input, string pattern)
         {
             if (string.IsNullOrEmpty(input) || string.IsNullOrEmpty(pattern))
                 return 0f;
 
-            // ¼ò»¯µÄ Jaccard ÏàËÆ¶È
+            // ç®€åŒ–çš„ Jaccard ç›¸ä¼¼åº¦
             var inputChars = new HashSet<char>(input);
             var patternChars = new HashSet<char>(pattern);
             
@@ -226,10 +226,10 @@ namespace Logic.Intent
     }
 
     /// <summary>
-    /// »ìºÏÒâÍ¼Ê¶±ğÆ÷
-    /// µÚÒ»²ã£º¹æÔòÒıÇæ£¨¸ßĞ§£©
-    /// µÚ¶ş²ã£ºÓïÒåÀ©Õ¹£¨Í¬Òå´Ê+ÒşÓ÷£©
-    /// µÚÈı²ã£ºLLM ºó±¸£¨¸´ÔÓÇé¿ö£©
+    /// æ··åˆæ„å›¾è¯†åˆ«å™¨
+    /// ç¬¬ä¸€å±‚ï¼šè§„åˆ™å¼•æ“ï¼ˆé«˜æ•ˆï¼‰
+    /// ç¬¬äºŒå±‚ï¼šè¯­ä¹‰æ‰©å±•ï¼ˆåŒä¹‰è¯+éšå–»ï¼‰
+    /// ç¬¬ä¸‰å±‚ï¼šLLM åå¤‡ï¼ˆå¤æ‚æƒ…å†µï¼‰
     /// </summary>
     public class IntentRecognizer
     {
@@ -239,10 +239,10 @@ namespace Logic.Intent
         private readonly List<IntentRule> _rules;
         private readonly Regex _targetExtractor;
         
-        // LLM ºó±¸Ê¶±ğµÄÖÃĞÅ¶ÈãĞÖµ
+        // LLM åå¤‡è¯†åˆ«çš„ç½®ä¿¡åº¦é˜ˆå€¼
         private const float LLM_FALLBACK_THRESHOLD = 0.4f;
         
-        // »º´æ×î½üµÄ LLM Ê¶±ğ½á¹û£¨±ÜÃâÖØ¸´ÇëÇó£©
+        // ç¼“å­˜æœ€è¿‘çš„ LLM è¯†åˆ«ç»“æœï¼ˆé¿å…é‡å¤è¯·æ±‚ï¼‰
         private readonly Dictionary<string, IntentResult> _llmCache = new Dictionary<string, IntentResult>();
         private const int MAX_CACHE_SIZE = 50;
 
@@ -250,12 +250,12 @@ namespace Logic.Intent
         {
             _rules = InitializeRules();
             _targetExtractor = new Regex(
-                @"(?:¶Ô|Ïò|Íù|³¯|È¥|°Ñ|¹¥»÷|²é¿´|¹Û²ì|Ê¹ÓÃ|Ê©Õ¹|ÊÍ·Å)\s*[""¡¸¡º]?(\S{1,10})[""¡¹¡»]?|(\S{2,6})(?:ÉíÉÏ|ÄÇ±ß|ÄÇÀï|´¦|ÅÔ)",
+                @"(?:å¯¹|å‘|å¾€|æœ|å»|æŠŠ|æ”»å‡»|æŸ¥çœ‹|è§‚å¯Ÿ|æ£€æŸ¥|ä½¿ç”¨|æ–½å±•|é‡Šæ”¾)\s*[""ã€Œã€]?(\S{1,10})[""ã€ã€]?|(\S{2,6})(?:èº«ä¸Š|é‚£è¾¹|é‚£é‡Œ|å¤„|æ—)",
                 RegexOptions.Compiled);
         }
 
         /// <summary>
-        /// ³õÊ¼»¯ÒâÍ¼Ê¶±ğ¹æÔò£¨ÔöÇ¿°æ£©
+        /// åˆå§‹åŒ–æ„å›¾è¯†åˆ«è§„åˆ™ï¼ˆå¢å¼ºç‰ˆï¼‰
         /// </summary>
         private List<IntentRule> InitializeRules()
         {
@@ -264,96 +264,96 @@ namespace Logic.Intent
                 new IntentRule
                 {
                     actionType = ActionType.Attack,
-                    keywords = new[] { "¹¥»÷", "´ò", "É±", "Õ¶", "¿³", "´Ì", "Åü", "×á", "»÷", "Õ½¶·", "½ø¹¥", "³öÊÖ", "¶¯ÊÖ", "Ô×", "ß±", "Öï" },
-                    semanticPatterns = new[] { "·¢Æğ¹¥»÷", "Ö÷¶¯³ö»÷", "ÏÈÏÂÊÖÎªÇ¿", "´òËû", "×áËû", "¸ÉËû" },
-                    regexPattern = @"(¹¥»÷|´ò|É±|Õ¶|¿³|Åü|×á|»÷|Õ½¶·|½ø¹¥|³öÊÖ|¶¯ÊÖ).{0,6}",
+                    keywords = new[] { "æ”»å‡»", "æ‰“", "æ€", "æ–©", "ç ", "åˆº", "åŠˆ", "æ", "å‡»", "æˆ˜æ–—", "è¿›æ”»", "å‡ºæ‰‹", "åŠ¨æ‰‹", "å®°", "å¼‘", "è¯›" },
+                    semanticPatterns = new[] { "å‘èµ·æ”»å‡»", "ä¸»åŠ¨å‡ºå‡»", "å…ˆä¸‹æ‰‹ä¸ºå¼º", "æ‰“ä»–", "æä»–", "å¹²ä»–" },
+                    regexPattern = @"(æ”»å‡»|æ‰“|æ€|æ–©|ç |åŠˆ|æ|å‡»|æˆ˜æ–—|è¿›æ”»|å‡ºæ‰‹|åŠ¨æ‰‹).{0,6}",
                     priority = 10
                 },
                 new IntentRule
                 {
                     actionType = ActionType.Defend,
-                    keywords = new[] { "·ÀÓù", "µ²", "¸ñµ²", "ÉÁ", "¶ã", "µ²×¡", "»¤×¡", "¼Ü×¡", "ÍËºó", "ºó³·" },
-                    semanticPatterns = new[] { "½øÈë·ÀÓù", "×öºÃ·À±¸", "Ğ¡ĞÄ½ä±¸", "·ÀÊØ×ËÌ¬" },
-                    regexPattern = @"(·ÀÓù|µ²|¸ñµ²|ÉÁ¿ª|µ²×¡|»¤×¡|¼Ü×¡|ÍË|³·)",
+                    keywords = new[] { "é˜²å¾¡", "æŒ¡", "æ ¼æŒ¡", "é—ª", "èº²", "æŒ¡ä½", "æŠ¤ä½", "æ¶ä½", "é€€å", "åæ’¤" },
+                    semanticPatterns = new[] { "è¿›å…¥é˜²å¾¡", "åšå¥½é˜²å¤‡", "å°å¿ƒæˆ’å¤‡", "é˜²å®ˆå§¿æ€" },
+                    regexPattern = @"(é˜²å¾¡|æŒ¡|æ ¼æŒ¡|é—ªå¼€|æŒ¡ä½|æŠ¤ä½|æ¶ä½|é€€|æ’¤)",
                     priority = 9
                 },
                 new IntentRule
                 {
                     actionType = ActionType.Move,
-                    keywords = new[] { "×ß", "ÅÜ", "Ç°½ø", "Àë¿ª", "³ö·¢", "ÒÆ¶¯", "È¥", "µ½", "Ïò", "³¯", "Ç°Íù", "½øÈë", "·µ»Ø", "ÌÓ", "³·ÍË", "ºóÍË", "×ªÉí" },
-                    semanticPatterns = new[] { "¶¯ÉíÇ°Íù", "Æô³Ì", "¸ÏÍù", "±¼Ïò", "ÌÓÀë´ËµØ" },
-                    regexPattern = @"(×ß|ÅÜ|Ç°½ø|Àë¿ª|³ö·¢|ÒÆ¶¯|È¥|µ½|Ïò|³¯|Ç°Íù|½øÈë|·µ»Ø|ÌÓ|Ïò[¶«ÄÏÎ÷±±ÉÏÏÂÇ°ºó])",
+                    keywords = new[] { "èµ°", "è·‘", "å‰è¿›", "ç¦»å¼€", "å‡ºå‘", "ç§»åŠ¨", "å»", "åˆ°", "å‘", "æœ", "å‰å¾€", "è¿›å…¥", "è¿”å›", "é€ƒ", "æ’¤é€€", "åé€€", "è½¬èº«" },
+                    semanticPatterns = new[] { "åŠ¨èº«å‰å¾€", "å¯ç¨‹", "èµ¶å¾€", "å¥”å‘", "é€ƒç¦»æ­¤åœ°" },
+                    regexPattern = @"(èµ°|è·‘|å‰è¿›|ç¦»å¼€|å‡ºå‘|ç§»åŠ¨|å»|åˆ°|å‘|æœ|å‰å¾€|è¿›å…¥|è¿”å›|é€ƒ|å‘[ä¸œå—è¥¿åŒ—ä¸Šä¸‹å‰å])",
                     priority = 7
                 },
                 new IntentRule
                 {
                     actionType = ActionType.Explore,
-                    keywords = new[] { "Ì½Ë÷", "ËÑË÷", "Ñ°ÕÒ", "ÕÒ", "µ÷²é", "Ì½Ñ°", "Ì½²é", "ÃşË÷", "ËÑÑ°" },
-                    semanticPatterns = new[] { "ËÄ´¦²é¿´", "×ĞÏ¸ËÑÑ°", "Ì½Ë÷ÖÜÎ§", "ÕÒÕÒ¿´" },
-                    regexPattern = @"(Ì½Ë÷|ËÑË÷|Ñ°ÕÒ|µ÷²é|Ì½Ñ°|Ì½²é|ÃşË÷|ËÑÑ°)",
+                    keywords = new[] { "æ¢ç´¢", "æœç´¢", "å¯»æ‰¾", "æ‰¾", "è°ƒæŸ¥", "æ¢å¯»", "æ¢æŸ¥", "æ‘¸ç´¢", "æœå¯»" },
+                    semanticPatterns = new[] { "å››å¤„æŸ¥çœ‹", "ä»”ç»†æœå¯»", "æ¢ç´¢å‘¨å›´", "æ‰¾æ‰¾çœ‹" },
+                    regexPattern = @"(æ¢ç´¢|æœç´¢|å¯»æ‰¾|è°ƒæŸ¥|æ¢å¯»|æ¢æŸ¥|æ‘¸ç´¢|æœå¯»)",
                     priority = 6
                 },
                 new IntentRule
                 {
                     actionType = ActionType.Observe,
-                    keywords = new[] { "¿´", "¹Û²ì", "²é¿´", "×¢ÊÓ", "ÉóÊÓ", "¶ËÏê", "´òÁ¿", "Íû", "»·¹Ë", "ÇÆ", "³ò" },
-                    semanticPatterns = new[] { "×ĞÏ¸¹Û²ì", "¿´¿´Çé¿ö", "´òÁ¿Ò»·¬", "¹ÛÍû" },
-                    regexPattern = @"(¿´|¹Û²ì|²é¿´|×¢ÊÓ|ÉóÊÓ|¶ËÏê|´òÁ¿|»·¹Ë|ÇÆ|³ò).{0,6}",
+                    keywords = new[] { "çœ‹", "è§‚å¯Ÿ", "æŸ¥çœ‹", "æ£€æŸ¥", "æ³¨è§†", "å®¡è§†", "ç«¯è¯¦", "æ‰“é‡", "æœ›", "ç¯é¡¾", "ç§", "ç…" },
+                    semanticPatterns = new[] { "ä»”ç»†è§‚å¯Ÿ", "çœ‹çœ‹æƒ…å†µ", "æ‰“é‡ä¸€ç•ª", "è§‚æœ›", "æ£€æŸ¥ä¸€ä¸‹" },
+                    regexPattern = @"(çœ‹|è§‚å¯Ÿ|æŸ¥çœ‹|æ£€æŸ¥|æ³¨è§†|å®¡è§†|ç«¯è¯¦|æ‰“é‡|ç¯é¡¾|ç§|ç…).{0,6}",
                     priority = 5
                 },
                 new IntentRule
                 {
                     actionType = ActionType.UseItem,
-                    keywords = new[] { "Ê¹ÓÃ", "ÓÃ", "³Ô", "·şÓÃ", "ÄÃ³ö", "×°±¸", "Åå´÷", "´©ÉÏ", "´÷ÉÏ", "ºÈ", "·şÏÂ", "ÍÌ" },
-                    semanticPatterns = new[] { "Ê¹ÓÃµÀ¾ß", "³Ôµã¶«Î÷", "ÄÃ³öÀ´ÓÃ", "¸ø×Ô¼ºÓÃ" },
-                    regexPattern = @"(Ê¹ÓÃ|ÓÃ|³Ô|·şÓÃ|ÄÃ³ö|×°±¸|ºÈ|·ş|ÍÌ).{0,8}",
+                    keywords = new[] { "ä½¿ç”¨", "ç”¨", "åƒ", "æœç”¨", "æ‹¿å‡º", "è£…å¤‡", "ä½©æˆ´", "ç©¿ä¸Š", "æˆ´ä¸Š", "å–", "æœä¸‹", "å" },
+                    semanticPatterns = new[] { "ä½¿ç”¨é“å…·", "åƒç‚¹ä¸œè¥¿", "æ‹¿å‡ºæ¥ç”¨", "ç»™è‡ªå·±ç”¨" },
+                    regexPattern = @"(ä½¿ç”¨|ç”¨|åƒ|æœç”¨|æ‹¿å‡º|è£…å¤‡|å–|æœ|å).{0,8}",
                     priority = 8
                 },
                 new IntentRule
                 {
                     actionType = ActionType.UseSkill,
-                    keywords = new[] { "Ê©Õ¹", "ÊÍ·Å", "·¢¶¯", "Ê¹ÓÃ", "ÔË¹¦", "ÖäÓï", "Ê©·¨", "´ß¶¯", "¼À³ö" },
-                    semanticPatterns = new[] { "Ê©Õ¹·¨Êõ", "ÊÍ·Å¼¼ÄÜ", "·¢¶¯¹¥»÷", "Ê¹³ö¾øÕĞ" },
-                    regexPattern = @"(Ê©Õ¹|ÊÍ·Å|·¢¶¯|Ê¹ÓÃ|ÔË¹¦|Ê©·¨|´ß¶¯|¼À³ö).{0,10}",
+                    keywords = new[] { "æ–½å±•", "é‡Šæ”¾", "å‘åŠ¨", "ä½¿ç”¨", "è¿åŠŸ", "å’’è¯­", "æ–½æ³•", "å‚¬åŠ¨", "ç¥­å‡º" },
+                    semanticPatterns = new[] { "æ–½å±•æ³•æœ¯", "é‡Šæ”¾æŠ€èƒ½", "å‘åŠ¨æ”»å‡»", "ä½¿å‡ºç»æ‹›" },
+                    regexPattern = @"(æ–½å±•|é‡Šæ”¾|å‘åŠ¨|ä½¿ç”¨|è¿åŠŸ|æ–½æ³•|å‚¬åŠ¨|ç¥­å‡º).{0,10}",
                     priority = 9
                 },
                 new IntentRule
                 {
                     actionType = ActionType.Talk,
-                    keywords = new[] { "Ëµ", "ÎÊ", "½»Ì¸", "¶Ô»°", "Ñ¯ÎÊ", "»Ø´ğ", "´ğ", "ÁÄ", "½²", "º°", "½Ğ", "ºô»½" },
-                    semanticPatterns = new[] { "ÓëÆä¶Ô»°", "¿ª¿ÚÑ¯ÎÊ", "´î»°", "´òÕĞºô" },
-                    regexPattern = @"(Ëµ|ÎÊ|½»Ì¸|¶Ô»°|Ñ¯ÎÊ|»Ø´ğ|´ğ|ÁÄ|½²|º°|½Ğ).{0,10}",
+                    keywords = new[] { "è¯´", "é—®", "äº¤è°ˆ", "å¯¹è¯", "è¯¢é—®", "å›ç­”", "ç­”", "èŠ", "è®²", "å–Š", "å«", "å‘¼å”¤" },
+                    semanticPatterns = new[] { "ä¸å…¶å¯¹è¯", "å¼€å£è¯¢é—®", "æ­è¯", "æ‰“æ‹›å‘¼" },
+                    regexPattern = @"(è¯´|é—®|äº¤è°ˆ|å¯¹è¯|è¯¢é—®|å›ç­”|ç­”|èŠ|è®²|å–Š|å«).{0,10}",
                     priority = 4
                 },
                 new IntentRule
                 {
                     actionType = ActionType.Rest,
-                    keywords = new[] { "ĞİÏ¢", "Ë¯¾õ", "´ò×ø", "Ú¤Ïë", "»Ö¸´", "ĞªÏ¢", "Ğª", "ÌÉ", "×øÏÂ" },
-                    semanticPatterns = new[] { "ĞİÏ¢Ò»ÏÂ", "»Ö¸´ÌåÁ¦", "Ñø¾«ĞîÈñ", "ĞªĞª½Å" },
-                    regexPattern = @"(ĞİÏ¢|Ë¯¾õ|´ò×ø|Ú¤Ïë|»Ö¸´|ĞªÏ¢|Ğª|ÌÉ|×øÏÂ)",
+                    keywords = new[] { "ä¼‘æ¯", "ç¡è§‰", "æ‰“å", "å†¥æƒ³", "æ¢å¤", "æ­‡æ¯", "æ­‡", "èºº", "åä¸‹" },
+                    semanticPatterns = new[] { "ä¼‘æ¯ä¸€ä¸‹", "æ¢å¤ä½“åŠ›", "å…»ç²¾è“„é”", "æ­‡æ­‡è„š" },
+                    regexPattern = @"(ä¼‘æ¯|ç¡è§‰|æ‰“å|å†¥æƒ³|æ¢å¤|æ­‡æ¯|æ­‡|èºº|åä¸‹)",
                     priority = 5
                 },
                 new IntentRule
                 {
                     actionType = ActionType.Collect,
-                    keywords = new[] { "²É¼¯", "ÊÕ¼¯", "¼ñ", "Ê°È¡", "Õª", "ÍÚ", "È¡", "ÄÃ" },
-                    semanticPatterns = new[] { "²É¼¯²ÄÁÏ", "ÊÕ¼¯ÎïÆ·", "¼ñÆğÀ´", "Ê°È¡" },
-                    regexPattern = @"(²É¼¯|ÊÕ¼¯|¼ñÆğ|Ê°È¡|Õª|ÍÚ|È¡).{0,6}",
+                    keywords = new[] { "é‡‡é›†", "æ”¶é›†", "æ¡", "æ‹¾å–", "æ‘˜", "æŒ–", "å–", "æ‹¿" },
+                    semanticPatterns = new[] { "é‡‡é›†ææ–™", "æ”¶é›†ç‰©å“", "æ¡èµ·æ¥", "æ‹¾å–" },
+                    regexPattern = @"(é‡‡é›†|æ”¶é›†|æ¡èµ·|æ‹¾å–|æ‘˜|æŒ–|å–).{0,6}",
                     priority = 6
                 },
                 new IntentRule
                 {
                     actionType = ActionType.Cultivate,
-                    keywords = new[] { "ĞŞÁ¶", "ĞŞĞĞ", "Á·¹¦", "Í»ÆÆ", "²ÎÎò", "ÁìÎò", "¸ĞÎò", "Á¶»¯", "ÍÂÄÉ" },
-                    semanticPatterns = new[] { "±Õ¹ØĞŞÁ¶", "Ç±ĞÄĞŞĞĞ", "¸ĞÎòÌìµÀ", "Í»ÆÆ¾³½ç" },
-                    regexPattern = @"(ĞŞÁ¶|ĞŞĞĞ|Á·¹¦|Í»ÆÆ|²ÎÎò|ÁìÎò|¸ĞÎò|Á¶»¯|ÍÂÄÉ)",
+                    keywords = new[] { "ä¿®ç‚¼", "ä¿®è¡Œ", "ç»ƒåŠŸ", "çªç ´", "å‚æ‚Ÿ", "é¢†æ‚Ÿ", "æ„Ÿæ‚Ÿ", "ç‚¼åŒ–", "åçº³" },
+                    semanticPatterns = new[] { "é—­å…³ä¿®ç‚¼", "æ½œå¿ƒä¿®è¡Œ", "æ„Ÿæ‚Ÿå¤©é“", "çªç ´å¢ƒç•Œ" },
+                    regexPattern = @"(ä¿®ç‚¼|ä¿®è¡Œ|ç»ƒåŠŸ|çªç ´|å‚æ‚Ÿ|é¢†æ‚Ÿ|æ„Ÿæ‚Ÿ|ç‚¼åŒ–|åçº³)",
                     priority = 5
                 }
             };
         }
 
         /// <summary>
-        /// Í¬²½Ê¶±ğÍæ¼ÒÊäÈëµÄÒâÍ¼£¨Ö÷Èë¿Ú£©
+        /// åŒæ­¥è¯†åˆ«ç©å®¶è¾“å…¥çš„æ„å›¾ï¼ˆä¸»å…¥å£ï¼‰
         /// </summary>
         public IntentResult Recognize(string playerInput)
         {
@@ -362,7 +362,7 @@ namespace Logic.Intent
 
             string input = playerInput.Trim();
             
-            // ========== µÚÒ»²ã£ºÒşÓ÷/¿ÚÓï»¯±í´ïÖ±½ÓÆ¥Åä ==========
+            // ========== ç¬¬ä¸€å±‚ï¼šéšå–»/å£è¯­åŒ–è¡¨è¾¾ç›´æ¥åŒ¹é… ==========
             if (SemanticMatcher.TryMatchMetaphor(input, out var metaphorType, out var metaphorConf))
             {
                 var metaphorResult = new IntentResult
@@ -373,11 +373,11 @@ namespace Logic.Intent
                     targetEntity = ExtractTarget(playerInput)
                 };
                 ExtractParameters(playerInput, metaphorResult);
-                Debug.Log($"<color=cyan>[ÒâÍ¼Ê¶±ğ-ÒşÓ÷] {playerInput} => {metaphorResult}</color>");
+                Debug.Log($"<color=cyan>[æ„å›¾è¯†åˆ«-éšå–»] {playerInput} => {metaphorResult}</color>");
                 return metaphorResult;
             }
 
-            // ========== µÚ¶ş²ã£ºÔöÇ¿¹æÔòÒıÇæ£¨º¬Í¬Òå´ÊÀ©Õ¹£© ==========
+            // ========== ç¬¬äºŒå±‚ï¼šå¢å¼ºè§„åˆ™å¼•æ“ï¼ˆå«åŒä¹‰è¯æ‰©å±•ï¼‰ ==========
             IntentResult bestResult = new IntentResult();
             int bestScore = 0;
 
@@ -394,52 +394,52 @@ namespace Logic.Intent
                 }
             }
 
-            // ÌáÈ¡Ä¿±êÊµÌå
+            // æå–ç›®æ ‡å®ä½“
             bestResult.targetEntity = ExtractTarget(playerInput);
 
-            // ÌáÈ¡¸½¼Ó²ÎÊı
+            // æå–é™„åŠ å‚æ•°
             ExtractParameters(playerInput, bestResult);
 
-            // ========== µÚÈı²ã£ºÖÃĞÅ¶È¹ıµÍÊ±±ê¼ÇĞèÒª LLM ºó±¸ ==========
+            // ========== ç¬¬ä¸‰å±‚ï¼šç½®ä¿¡åº¦è¿‡ä½æ—¶æ ‡è®°éœ€è¦ LLM åå¤‡ ==========
             if (bestResult.confidence < LLM_FALLBACK_THRESHOLD)
             {
                 bestResult.recognitionSource = "low_confidence";
-                Debug.Log($"<color=yellow>[ÒâÍ¼Ê¶±ğ-µÍÖÃĞÅ¶È] {playerInput} => {bestResult}, ½¨ÒéÆôÓÃLLMºó±¸</color>");
+                Debug.Log($"<color=yellow>[æ„å›¾è¯†åˆ«-ä½ç½®ä¿¡åº¦] {playerInput} => {bestResult}, å»ºè®®å¯ç”¨LLMåå¤‡</color>");
             }
             else
             {
-                Debug.Log($"<color=green>[ÒâÍ¼Ê¶±ğ] {playerInput} => {bestResult}</color>");
+                Debug.Log($"<color=green>[æ„å›¾è¯†åˆ«] {playerInput} => {bestResult}</color>");
             }
 
             return bestResult;
         }
 
         /// <summary>
-        /// Òì²½Ê¶±ğ£¨ÆôÓÃ LLM ºó±¸£©
+        /// å¼‚æ­¥è¯†åˆ«ï¼ˆå¯ç”¨ LLM åå¤‡ï¼‰
         /// </summary>
         public void RecognizeAsync(string playerInput, Action<IntentResult> callback)
         {
-            // ÏÈ³¢ÊÔ±¾µØÊ¶±ğ
+            // å…ˆå°è¯•æœ¬åœ°è¯†åˆ«
             var localResult = Recognize(playerInput);
 
-            // Èç¹ûÖÃĞÅ¶È×ã¹»¸ß£¬Ö±½Ó·µ»Ø
+            // å¦‚æœç½®ä¿¡åº¦è¶³å¤Ÿé«˜ï¼Œç›´æ¥è¿”å›
             if (localResult.confidence >= LLM_FALLBACK_THRESHOLD)
             {
                 callback?.Invoke(localResult);
                 return;
             }
 
-            // ¼ì²é»º´æ
+            // æ£€æŸ¥ç¼“å­˜
             if (_llmCache.TryGetValue(playerInput, out var cachedResult))
             {
                 callback?.Invoke(cachedResult);
                 return;
             }
 
-            // ÆôÓÃ LLM ºó±¸Ê¶±ğ
+            // å¯ç”¨ LLM åå¤‡è¯†åˆ«
             RequestLLMIntentRecognition(playerInput, (llmResult) =>
             {
-                // ºÏ²¢½á¹û£ºLLM ½á¹ûÓÅÏÈ£¬µ«±£Áô±¾µØÌáÈ¡µÄ²ÎÊı
+                // åˆå¹¶ç»“æœï¼šLLM ç»“æœä¼˜å…ˆï¼Œä½†ä¿ç•™æœ¬åœ°æå–çš„å‚æ•°
                 if (llmResult.actionType != ActionType.Unknown)
                 {
                     llmResult.targetEntity = llmResult.targetEntity ?? localResult.targetEntity;
@@ -449,27 +449,27 @@ namespace Logic.Intent
                             llmResult.parameters[kvp.Key] = kvp.Value;
                     }
                     
-                    // »º´æ½á¹û
+                    // ç¼“å­˜ç»“æœ
                     CacheResult(playerInput, llmResult);
                     callback?.Invoke(llmResult);
                 }
                 else
                 {
-                    // LLM Ò²ÎŞ·¨Ê¶±ğ£¬·µ»Ø±¾µØ½á¹û
+                    // LLM ä¹Ÿæ— æ³•è¯†åˆ«ï¼Œè¿”å›æœ¬åœ°ç»“æœ
                     callback?.Invoke(localResult);
                 }
             });
         }
 
         /// <summary>
-        /// ÔöÇ¿Æ¥ÅäµÃ·Ö¼ÆËã£¨º¬Í¬Òå´Ê£©
+        /// å¢å¼ºåŒ¹é…å¾—åˆ†è®¡ç®—ï¼ˆå«åŒä¹‰è¯ï¼‰
         /// </summary>
         private int CalculateEnhancedMatchScore(string input, IntentRule rule, out string matchedVerb)
         {
             int score = 0;
             matchedVerb = null;
 
-            // Ô­Ê¼¹Ø¼ü´ÊÆ¥Åä
+            // åŸå§‹å…³é”®è¯åŒ¹é…
             foreach (var keyword in rule.keywords)
             {
                 if (input.Contains(keyword))
@@ -481,12 +481,12 @@ namespace Logic.Intent
                 }
             }
 
-            // Í¬Òå´ÊÀ©Õ¹Æ¥Åä
+            // åŒä¹‰è¯æ‰©å±•åŒ¹é…
             foreach (var keyword in rule.keywords)
             {
                 if (SemanticMatcher.MatchWithSynonyms(input, keyword, out string matched))
                 {
-                    if (matched != keyword) // ±ÜÃâÖØ¸´¼Æ·Ö
+                    if (matched != keyword) // é¿å…é‡å¤è®¡åˆ†
                     {
                         score += 4 + rule.priority / 2;
                         matchedVerb = matchedVerb ?? matched;
@@ -494,7 +494,7 @@ namespace Logic.Intent
                 }
             }
 
-            // ÓïÒåÄ£Ê½Æ¥Åä
+            // è¯­ä¹‰æ¨¡å¼åŒ¹é…
             if (rule.semanticPatterns != null)
             {
                 foreach (var pattern in rule.semanticPatterns)
@@ -507,7 +507,7 @@ namespace Logic.Intent
                 }
             }
 
-            // ÕıÔòÆ¥Åä¼Ó·Ö
+            // æ­£åˆ™åŒ¹é…åŠ åˆ†
             if (!string.IsNullOrEmpty(rule.regexPattern))
             {
                 var match = Regex.Match(input, rule.regexPattern);
@@ -522,7 +522,7 @@ namespace Logic.Intent
         }
 
         /// <summary>
-        /// ÌáÈ¡Ä¿±êÊµÌå
+        /// æå–ç›®æ ‡å®ä½“
         /// </summary>
         private string ExtractTarget(string input)
         {
@@ -536,59 +536,59 @@ namespace Logic.Intent
         }
 
         /// <summary>
-        /// ÌáÈ¡¸½¼Ó²ÎÊı
+        /// æå–é™„åŠ å‚æ•°
         /// </summary>
         private void ExtractParameters(string input, IntentResult result)
         {
-            // ÌáÈ¡·½Ïò
-            Match dirMatch = Regex.Match(input, @"Ïò?(¶«|ÄÏ|Î÷|±±|ÉÏ|ÏÂ|Ç°|ºó|×ó|ÓÒ)");
+            // æå–æ–¹å‘
+            Match dirMatch = Regex.Match(input, @"å‘?(ä¸œ|å—|è¥¿|åŒ—|ä¸Š|ä¸‹|å‰|å|å·¦|å³)");
             if (dirMatch.Success)
                 result.parameters["direction"] = dirMatch.Groups[1].Value;
 
-            // ÌáÈ¡ÊıÁ¿
-            Match numMatch = Regex.Match(input, @"(\d+|Ò»|¶ş|Èı|ËÄ|Îå|Áù|Æß|°Ë|¾Å|Ê®)[¸öÖ»°ÑÆ¿¿Å]?");
+            // æå–æ•°é‡
+            Match numMatch = Regex.Match(input, @"(\d+|ä¸€|äºŒ|ä¸‰|å››|äº”|å…­|ä¸ƒ|å…«|ä¹|å)[ä¸ªåªæŠŠç“¶é¢—]?");
             if (numMatch.Success)
                 result.parameters["quantity"] = numMatch.Groups[1].Value;
 
-            // ÌáÈ¡¼¼ÄÜÃû£¨ÒıºÅÄÚÄÚÈİ£©
-            Match skillMatch = Regex.Match(input, @"[""¡¸¡º](.+?)[""¡¹¡»]");
+            // æå–æŠ€èƒ½åï¼ˆå¼•å·å†…å†…å®¹ï¼‰
+            Match skillMatch = Regex.Match(input, @"[""ã€Œã€](.+?)[""ã€ã€]");
             if (skillMatch.Success)
                 result.parameters["skill_name"] = skillMatch.Groups[1].Value;
 
-            // ÌáÈ¡ÎïÆ·Ãû£¨³£¼ûÎïÆ·´Ê×º£©
-            Match itemMatch = Regex.Match(input, @"([\u4e00-\u9fa5]{2,4}(?:µ¤|Ò©|½£|µ¶|¼×|·û|Ê¯|²İ|¹û|Ë®|¾Æ|Íè))");
+            // æå–ç‰©å“åï¼ˆå¸¸è§ç‰©å“è¯ç¼€ï¼‰
+            Match itemMatch = Regex.Match(input, @"([\u4e00-\u9fa5]{2,4}(?:ä¸¹|è¯|å‰‘|åˆ€|ç”²|ç¬¦|çŸ³|è‰|æœ|æ°´|é…’|ä¸¸))");
             if (itemMatch.Success && !result.parameters.ContainsKey("item_name"))
                 result.parameters["item_name"] = itemMatch.Groups[1].Value;
         }
 
         /// <summary>
-        /// LLM ºó±¸ÒâÍ¼Ê¶±ğ
+        /// LLM åå¤‡æ„å›¾è¯†åˆ«
         /// </summary>
         private void RequestLLMIntentRecognition(string playerInput, Action<IntentResult> callback)
         {
-            string prompt = $@"ÄãÊÇÒ»¸öÓÎÏ·ÒâÍ¼Ê¶±ğÆ÷¡£Çë·ÖÎöÍæ¼ÒÊäÈë£¬·µ»ØJSON¸ñÊ½µÄÒâÍ¼Ê¶±ğ½á¹û¡£
+            string prompt = $@"ä½ æ˜¯ä¸€ä¸ªæ¸¸æˆæ„å›¾è¯†åˆ«å™¨ã€‚è¯·åˆ†æç©å®¶è¾“å…¥ï¼Œè¿”å›JSONæ ¼å¼çš„æ„å›¾è¯†åˆ«ç»“æœã€‚
 
-Íæ¼ÒÊäÈë£º{playerInput}
+ç©å®¶è¾“å…¥ï¼š{playerInput}
 
-¿ÉÑ¡µÄ¶¯×÷ÀàĞÍ£¨actionType£©£º
-- Attack£¨¹¥»÷£©
-- Defend£¨·ÀÓù£©
-- Move£¨ÒÆ¶¯£©
-- Explore£¨Ì½Ë÷£©
-- UseItem£¨Ê¹ÓÃÎïÆ·£©
-- UseSkill£¨Ê¹ÓÃ¼¼ÄÜ£©
-- Talk£¨¶Ô»°£©
-- Rest£¨ĞİÏ¢£©
-- Observe£¨¹Û²ì£©
-- Collect£¨²É¼¯£©
-- Cultivate£¨ĞŞÁ¶£©
-- Unknown£¨ÎŞ·¨Ê¶±ğ£©
+å¯é€‰çš„åŠ¨ä½œç±»å‹ï¼ˆactionTypeï¼‰ï¼š
+- Attackï¼ˆæ”»å‡»ï¼‰
+- Defendï¼ˆé˜²å¾¡ï¼‰
+- Moveï¼ˆç§»åŠ¨ï¼‰
+- Exploreï¼ˆæ¢ç´¢ï¼‰
+- UseItemï¼ˆä½¿ç”¨ç‰©å“ï¼‰
+- UseSkillï¼ˆä½¿ç”¨æŠ€èƒ½ï¼‰
+- Talkï¼ˆå¯¹è¯ï¼‰
+- Restï¼ˆä¼‘æ¯ï¼‰
+- Observeï¼ˆè§‚å¯Ÿï¼‰
+- Collectï¼ˆé‡‡é›†ï¼‰
+- Cultivateï¼ˆä¿®ç‚¼ï¼‰
+- Unknownï¼ˆæ— æ³•è¯†åˆ«ï¼‰
 
-ÇëÖ±½ÓÊä³öJSON£¬²»ÒªÓĞÆäËûÎÄ×Ö£º
-{{""actionType"": ""ÀàĞÍ"", ""target"": ""Ä¿±ê¶ÔÏó»ònull"", ""confidence"": 0.0µ½1.0}}";
+è¯·ç›´æ¥è¾“å‡ºJSONï¼Œä¸è¦æœ‰å…¶ä»–æ–‡å­—ï¼š
+{{""actionType"": ""ç±»å‹"", ""target"": ""ç›®æ ‡å¯¹è±¡æˆ–null"", ""confidence"": 0.0åˆ°1.0}}";
 
             LLMService.Instance.PostNonStream(
-                "ÄãÊÇ¾«È·µÄÒâÍ¼·ÖÀàÆ÷£¬Ö»Êä³öJSON£¬²»Òª½âÊÍ¡£",
+                "ä½ æ˜¯ç²¾ç¡®çš„æ„å›¾åˆ†ç±»å™¨ï¼Œåªè¾“å‡ºJSONï¼Œä¸è¦è§£é‡Šã€‚",
                 prompt,
                 (response) =>
                 {
@@ -600,7 +600,7 @@ namespace Logic.Intent
         }
 
         /// <summary>
-        /// ½âÎö LLM ·µ»ØµÄÒâÍ¼Ê¶±ğ½á¹û
+        /// è§£æ LLM è¿”å›çš„æ„å›¾è¯†åˆ«ç»“æœ
         /// </summary>
         private IntentResult ParseLLMIntentResponse(string response)
         {
@@ -611,7 +611,7 @@ namespace Logic.Intent
 
             try
             {
-                // ÌáÈ¡ JSON ²¿·Ö
+                // æå– JSON éƒ¨åˆ†
                 var jsonMatch = Regex.Match(response, @"\{[^{}]*\}");
                 if (!jsonMatch.Success)
                     return result;
@@ -638,25 +638,25 @@ namespace Logic.Intent
                 }
                 else
                 {
-                    result.confidence = 0.7f; // LLM ½á¹ûÄ¬ÈÏÖÃĞÅ¶È
+                    result.confidence = 0.7f; // LLM ç»“æœé»˜è®¤ç½®ä¿¡åº¦
                 }
             }
             catch (Exception e)
             {
-                Debug.LogWarning($"[ÒâÍ¼Ê¶±ğ] LLM ÏìÓ¦½âÎöÊ§°Ü: {e.Message}");
+                Debug.LogWarning($"[æ„å›¾è¯†åˆ«] LLM å“åº”è§£æå¤±è´¥: {e.Message}");
             }
 
             return result;
         }
 
         /// <summary>
-        /// »º´æ LLM Ê¶±ğ½á¹û
+        /// ç¼“å­˜ LLM è¯†åˆ«ç»“æœ
         /// </summary>
         private void CacheResult(string input, IntentResult result)
         {
             if (_llmCache.Count >= MAX_CACHE_SIZE)
             {
-                // ¼òµ¥ÇåÀí£ºÒÆ³ıÒ»°ë»º´æ
+                // ç®€å•æ¸…ç†ï¼šç§»é™¤ä¸€åŠç¼“å­˜
                 var keys = new List<string>(_llmCache.Keys);
                 for (int i = 0; i < keys.Count / 2; i++)
                 {
@@ -667,7 +667,7 @@ namespace Logic.Intent
         }
 
         /// <summary>
-        /// Çå³ı»º´æ
+        /// æ¸…é™¤ç¼“å­˜
         /// </summary>
         public void ClearCache()
         {

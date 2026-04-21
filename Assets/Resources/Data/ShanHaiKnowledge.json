@@ -1,0 +1,97 @@
+{
+  "entities": [
+    {
+      "id": "loc_zhaoyao",
+      "name": "招摇山",
+      "entityType": "Location",
+      "description": "招摇之山多桂木与矿玉，山岚不散，晨雾常沿着石脊和古松根须游走。",
+      "source": "山海经·南山经",
+      "tags": [ "南山经", "雾", "灵山" ]
+    },
+    {
+      "id": "herb_zhuyu",
+      "name": "祝余",
+      "entityType": "Herb",
+      "description": "招摇之山有草焉，其状如韭而青华，其名曰祝余，食之不饥。",
+      "source": "山海经·南山经",
+      "tags": [ "辟谷", "果腹", "草药" ]
+    },
+    {
+      "id": "herb_migu",
+      "name": "迷谷",
+      "entityType": "Herb",
+      "description": "招摇之山有木焉，其状如榖而黑理，其华四照，其名曰迷谷，佩之不迷。",
+      "source": "山海经·南山经",
+      "tags": [ "辨路", "避雾", "灵木" ]
+    },
+    {
+      "id": "beast_jiuwei",
+      "name": "九尾狐",
+      "entityType": "Beast",
+      "description": "青丘之山有兽焉，其状如狐而九尾，其音如婴儿，能食人，食者不蛊。",
+      "source": "山海经·南山经",
+      "tags": [ "神兽", "青丘", "九尾" ]
+    },
+    {
+      "id": "beast_bifang",
+      "name": "毕方",
+      "entityType": "Beast",
+      "description": "章莪之山有鸟焉，其状如鹤，一足，赤文青质而白喙，名曰毕方，见则其邑有讹火。",
+      "source": "山海经·西山经",
+      "tags": [ "神鸟", "火兆", "一足" ]
+    },
+    {
+      "id": "loc_qingqiu",
+      "name": "青丘",
+      "entityType": "Location",
+      "description": "又东三百里，曰青丘之山，其阳多玉，其阴多青雘，是九尾狐的著名出没之地。",
+      "source": "山海经·南山经",
+      "tags": [ "仙山", "玉石", "九尾狐" ]
+    },
+    {
+      "id": "loc_zhange",
+      "name": "章莪之山",
+      "entityType": "Location",
+      "description": "章莪之山风势燥烈，常伴赤纹异火，是毕方留下灾兆的山地。",
+      "source": "山海经·西山经",
+      "tags": [ "火兆", "异鸟", "山岳" ]
+    }
+  ],
+  "relations": [
+    {
+      "fromId": "herb_zhuyu",
+      "toId": "loc_zhaoyao",
+      "relationType": "GrowsIn",
+      "description": "祝余生于招摇山",
+      "weight": 1.0
+    },
+    {
+      "fromId": "herb_migu",
+      "toId": "loc_zhaoyao",
+      "relationType": "GrowsIn",
+      "description": "迷谷生于招摇山",
+      "weight": 1.0
+    },
+    {
+      "fromId": "herb_migu",
+      "toId": "loc_zhaoyao",
+      "relationType": "RequiredFor",
+      "description": "迷谷常被用来辨清招摇山迷雾中的路径",
+      "weight": 0.9
+    },
+    {
+      "fromId": "beast_jiuwei",
+      "toId": "loc_qingqiu",
+      "relationType": "FoundIn",
+      "description": "九尾狐出没于青丘",
+      "weight": 1.0
+    },
+    {
+      "fromId": "beast_bifang",
+      "toId": "loc_zhange",
+      "relationType": "FoundIn",
+      "description": "毕方出没于章莪之山",
+      "weight": 1.0
+    }
+  ]
+}

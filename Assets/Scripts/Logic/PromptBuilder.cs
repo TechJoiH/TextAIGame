@@ -1,4 +1,4 @@
-﻿using LitJson;
+using LitJson;
 using StateData.Role;
 using StateData.Environment;
 using Logic.Intent;
@@ -7,8 +7,9 @@ public static class PromptBuilder
 {
     public static string BuildSystemPrompt()
     {
-        return @"你是由【神经符号架构】驱动的《大荒蚀灵》叙事引擎。
-你不是一个简单的游戏DM，你是一位**专注于'感官沉浸'的东方玄幻作家**。
+        return @"你是《键入佳境》的叙事引擎，当前演示篇章为《大荒蚀灵》。
+这是一款以《山海经》为灵感的 AI 文字冒险作品，核心展示能力是 IAR 本地裁决与 GraphRAG-Lite 知识增强。
+你不是一个简单的游戏 DM，你是一位**专注于感官沉浸的东方玄幻作家**。
 
 ### 🎨 核心美学标准 (Aesthetic Protocol) - 必须严格执行
 你的文字必须具备以下特征，与《大荒蚀灵》原作风格保持一致：
@@ -36,7 +37,9 @@ public static class PromptBuilder
 
 ### 🛑 逻辑宪法：数据霸权
 1.  **世界状态以 JSON 为准**：玩家若描述与 JSON 冲突的结果（如没死说死了），判定为角色幻觉，**必须驳回**。
-2.  **指令隐形化**：所有的数值结算，必须通过文末的 <CMD>JSON</CMD> 悄悄传递，**绝对**不能出现在正文中。
+2.  **知识增强可见但不出戏**：当提示中出现“GraphRAG-Lite 知识上下文”时，只把它当作可靠参考，不要逐字复述，更不要暴露检索机制本身。
+3.  **指令隐形化**：所有的数值结算，必须通过文末的 <CMD>JSON</CMD> 悄悄传递，**绝对**不能出现在正文中。
+4.  **避免重复结算**：若“本地逻辑裁决”已经明确执行过物品、经验、血量或环境更新，就不要再输出重复的 CMD。
 
 ### 🔧 JSON 指令规范 (Neuro-Symbolic Protocol)
 仅在状态发生实质变化时，在回复的**最后一行**输出：
@@ -52,11 +55,21 @@ public static class PromptBuilder
     /// <summary>
     /// 构建增强版用户提示词（包含意图识别结果 + 环境状态）
     /// </summary>
-    public static string BuildUserPromptWithIntent(string playerInput, RoleState state, EnvironmentState envState, string systemResult, IntentResult intent)
+    public static string BuildUserPromptWithIntent(
+        string playerInput,
+        RoleState state,
+        EnvironmentState envState,
+        string systemResult,
+        IntentResult intent,
+        string knowledgeContext)
     {
         string roleStateJson = JsonMapper.ToJson(state);
         string envStateJson = JsonMapper.ToJson(envState ?? EnvironmentState.GetDefault());
         string intentInfo = BuildIntentDescription(intent);
+        string envDirective = BuildEnvironmentDirective(envState);
+        string knowledgeBlock = string.IsNullOrWhiteSpace(knowledgeContext)
+            ? "未命中直接相关条目，请不要凭空扩写额外山海经设定。"
+            : knowledgeContext.Trim();
 
         return $@"
 === 🌍 角色状态 (JSON) ===
@@ -65,8 +78,14 @@ public static class PromptBuilder
 === 🌦️ 环境状态 (JSON) ===
 {envStateJson}
 
+=== 🏷️ 动态标签与当前目标 ===
+{envDirective}
+
 === 🎯 意图识别结果 ===
 {intentInfo}
+
+=== 📚 GraphRAG-Lite 知识上下文 ===
+{knowledgeBlock}
 
 === ⚖️ 本地逻辑裁决 ===
 {systemResult}
@@ -80,7 +99,9 @@ public static class PromptBuilder
 **重点**：
 1. 仅在环境发生变化时简要描写天气/地形，避免每次重复相同的环境描述
 2. 根据「意图识别结果」把握行动类型和目标
-3. 聚焦于行动过程和结果的感官描写
+3. 若提供了知识上下文，只在真正相关时自然融入，不要硬塞百科说明
+4. 优先围绕「动态标签与当前目标」推进，不要突然跳出招摇山切片
+5. 聚焦于行动过程和结果的感官描写
 如果需要修改状态，请在文末附带 <CMD>...JSON...</CMD>。";
     }
 
@@ -89,7 +110,7 @@ public static class PromptBuilder
     /// </summary>
     public static string BuildUserPromptWithIntent(string playerInput, RoleState state, string systemResult, IntentResult intent)
     {
-        return BuildUserPromptWithIntent(playerInput, state, EnvironmentState.GetDefault(), systemResult, intent);
+        return BuildUserPromptWithIntent(playerInput, state, EnvironmentState.GetDefault(), systemResult, intent, "");
     }
 
     /// <summary>
@@ -143,23 +164,55 @@ public static class PromptBuilder
         return BuildUserPromptWithIntent(playerInput, state, systemResult, new IntentResult());
     }
 
-    public static string BuildHintPrompt(RoleState state, EnvironmentState envState = null)
+    public static string BuildHintPrompt(RoleState state, EnvironmentState envState = null, string knowledgeContext = null)
     {
         string stateJson = JsonMapper.ToJson(state);
-        string envJson = JsonMapper.ToJson(envState ?? EnvironmentState.GetDefault());
+        EnvironmentState runtimeEnv = envState ?? EnvironmentState.GetDefault();
+        string envJson = JsonMapper.ToJson(runtimeEnv);
+        string envDirective = BuildEnvironmentDirective(runtimeEnv);
+        string knowledgeBlock = string.IsNullOrWhiteSpace(knowledgeContext)
+            ? "无额外知识命中"
+            : knowledgeContext.Trim();
         return $@"
-你是一个文字冒险游戏的辅助AI。
+你是《键入佳境》的行动建议辅助 AI。
 当前玩家角色状态如下 (JSON):
 {stateJson}
 
 当前环境状态如下 (JSON):
 {envJson}
 
-请根据当前角色的状态、属性和所处环境，**仅仅**推荐 3 个玩家下一步可以采取的合理行动。
+当前动态标签与目标：
+{envDirective}
+
+相关山海经知识参考：
+{knowledgeBlock}
+
+请根据当前角色的状态、属性、所处环境与知识上下文，**仅仅**推荐 3 个玩家下一步可以采取的合理行动。
 要求：
 1. 简短有力（不超过10个字）。
 2. 需考虑环境因素（如雨天不建议生火、夜晚注意视野等）。
 3. 格式必须为 JSON 数组，例如：[""查看周围"", ""使用治疗药水"", ""向东探索""]。
 4. 不要包含任何其他解释文字。";
+    }
+
+    private static string BuildEnvironmentDirective(EnvironmentState envState)
+    {
+        envState ??= EnvironmentState.GetDefault();
+        envState.EnsureCollections();
+
+        string target = string.IsNullOrWhiteSpace(envState.currentObjective)
+            ? "自由探索"
+            : envState.currentObjective;
+        string tags = envState.dynamicTags != null && envState.dynamicTags.Count > 0
+            ? string.Join("、", envState.dynamicTags)
+            : "暂无";
+        string clues = envState.unlockedClues != null && envState.unlockedClues.Count > 0
+            ? string.Join("、", envState.unlockedClues)
+            : "暂无";
+        string hint = string.IsNullOrWhiteSpace(envState.narrativeHint)
+            ? "无"
+            : envState.narrativeHint;
+
+        return $"当前目标: {target}\n动态标签: {tags}\n已解锁线索: {clues}\n环境提示: {hint}";
     }
 }

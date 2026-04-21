@@ -1,39 +1,38 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using System.Text.RegularExpressions;
 using UnityEngine;
 
 namespace Logic.Memory
 {
-    /// <summary>
-    /// ¶Ô»°¼ÇÂ¼ÌõÄ¿
-    /// </summary>
     [Serializable]
     public class DialogueEntry
     {
-        public string role;           // "user" »ò "assistant"
-        public string content;        // ¶Ô»°ÄÚÈİ
-        public long timestamp;        // Ê±¼ä´Á
-        public int tokenEstimate;     // ¹ÀËãTokenÊı
+        public string role;
+        public string content;
+        public long timestamp;
+        public int tokenEstimate;
+
+        public DialogueEntry()
+        {
+        }
 
         public DialogueEntry(string role, string content)
         {
             this.role = role;
             this.content = content;
-            this.timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-            this.tokenEstimate = EstimateTokens(content);
+            timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            tokenEstimate = EstimateTokens(content);
         }
 
-        /// <summary>
-        /// ¼òµ¥µÄ Token ¹ÀËã£¨ÖĞÎÄÔ¼1.5×Ö·û/token£¬Ó¢ÎÄÔ¼4×Ö·û/token£©
-        /// </summary>
         private static int EstimateTokens(string text)
         {
-            if (string.IsNullOrEmpty(text)) return 0;
-            
+            if (string.IsNullOrEmpty(text))
+                return 0;
+
             int chineseCount = 0;
             int otherCount = 0;
-            
             foreach (char c in text)
             {
                 if (c >= 0x4E00 && c <= 0x9FFF)
@@ -41,21 +40,18 @@ namespace Logic.Memory
                 else
                     otherCount++;
             }
-            
+
             return (int)(chineseCount / 1.5f + otherCount / 4f) + 1;
         }
     }
 
-    /// <summary>
-    /// ³¤ÆÚ¼ÇÒäÕªÒª
-    /// </summary>
     [Serializable]
     public class LongTermMemory
     {
-        public string summary;                    // Ñ¹ËõºóµÄÕªÒªÎÄ±¾
-        public int originalTurnCount;             // Ô­Ê¼¶Ô»°ÂÖÊı
-        public long createdAt;                    // ´´½¨Ê±¼ä
-        public List<string> keyEvents;            // ¹Ø¼üÊÂ¼ş±êÇ©
+        public string summary;
+        public int originalTurnCount;
+        public long createdAt;
+        public List<string> keyEvents;
 
         public LongTermMemory()
         {
@@ -64,9 +60,6 @@ namespace Logic.Memory
         }
     }
 
-    /// <summary>
-    /// ¼ÇÒä×´Ì¬¿ìÕÕ£¨ÓÃÓÚ´æµµ£©
-    /// </summary>
     [Serializable]
     public class MemorySnapshot
     {
@@ -75,234 +68,174 @@ namespace Logic.Memory
         public int totalTurns;
     }
 
-    /// <summary>
-    /// Ë«²ã¼ÇÒä¹ÜÀíÆ÷
-    /// ¶ÌÆÚ¼ÇÒä£º±£´æÍêÕû¶Ô»°£¨»¬¶¯´°¿Ú£©
-    /// ³¤ÆÚ¼ÇÒä£º³¬³ö´°¿Úºó½øĞĞÕªÒªÑ¹Ëõ
-    /// </summary>
     public class MemoryManager : MonoSingleton<MemoryManager>
     {
-        [Header("¼ÇÒäÅäÖÃ")]
-        [Tooltip("¶ÌÆÚ¼ÇÒä×î´óTokenÊı")]
+        [Header("è®°å¿†é…ç½®")]
+        [Tooltip("çŸ­æœŸè®°å¿†æœ€å¤§ Token æ•°")]
         [SerializeField] private int maxShortTermTokens = 2000;
-        
-        [Tooltip("´¥·¢ÕªÒªÑ¹ËõµÄTokenãĞÖµ")]
+
+        [Tooltip("è§¦å‘æ‘˜è¦å‹ç¼©çš„ Token é˜ˆå€¼")]
         [SerializeField] private int compressionThreshold = 1500;
-        
-        [Tooltip("¶ÌÆÚ¼ÇÒä×î´óÂÖÊı")]
+
+        [Tooltip("çŸ­æœŸè®°å¿†æœ€å¤§è½®æ•°")]
         [SerializeField] private int maxShortTermTurns = 10;
-        
-        [Tooltip("³¤ÆÚ¼ÇÒä×î´óÌõÊı")]
+
+        [Tooltip("é•¿æœŸè®°å¿†æœ€å¤§æ¡æ•°")]
         [SerializeField] private int maxLongTermCount = 5;
 
-        // ¶ÌÆÚ¼ÇÒä£ºÍêÕû¶Ô»°ÀúÊ·£¨»¬¶¯´°¿Ú£©
-        private List<DialogueEntry> _shortTermMemory = new List<DialogueEntry>();
-        
-        // ³¤ÆÚ¼ÇÒä£ºÑ¹ËõºóµÄÕªÒª
-        private List<LongTermMemory> _longTermMemories = new List<LongTermMemory>();
-        
-        // Í³¼Æ
-        private int _totalTurns = 0;
-        
-        // ÕªÒªÉú³ÉÖĞ±êÖ¾
-        private bool _isSummarizing = false;
+        private readonly List<DialogueEntry> _shortTermMemory = new List<DialogueEntry>();
+        private readonly List<LongTermMemory> _longTermMemories = new List<LongTermMemory>();
+        private int _totalTurns;
+        private bool _isSummarizing;
 
-        /// <summary>
-        /// µ±Ç°¶ÌÆÚ¼ÇÒäµÄToken×ÜÊı
-        /// </summary>
         public int CurrentShortTermTokens
         {
             get
             {
                 int total = 0;
                 foreach (var entry in _shortTermMemory)
-                    total += entry.tokenEstimate;
+                {
+                    if (entry != null)
+                        total += entry.tokenEstimate;
+                }
+
                 return total;
             }
         }
 
-        /// <summary>
-        /// Ìí¼ÓÓÃ»§ÊäÈëµ½¼ÇÒä
-        /// </summary>
         public void AddUserMessage(string content)
         {
-            if (string.IsNullOrWhiteSpace(content)) return;
-            
-            var entry = new DialogueEntry("user", content);
-            _shortTermMemory.Add(entry);
+            if (string.IsNullOrWhiteSpace(content))
+                return;
+
+            _shortTermMemory.Add(new DialogueEntry("user", content));
             _totalTurns++;
-            
-            Debug.Log($"<color=yellow>[Memory] Ìí¼ÓÓÃ»§ÏûÏ¢£¬µ±Ç°Token: {CurrentShortTermTokens}</color>");
-            
+
+            Debug.Log($"<color=yellow>[Memory] æ·»åŠ ç”¨æˆ·æ¶ˆæ¯ï¼Œå½“å‰Token: {CurrentShortTermTokens}</color>");
             CheckAndCompress();
         }
 
-        /// <summary>
-        /// Ìí¼ÓAI»Ø¸´µ½¼ÇÒä£¨ÒÑÇåÀíCMD±êÇ©£©
-        /// </summary>
         public void AddAssistantMessage(string content)
         {
-            if (string.IsNullOrWhiteSpace(content)) return;
-            
-            // ÇåÀí CMD ±êÇ©ºóÔÙ´æ´¢
-            string cleanContent = System.Text.RegularExpressions.Regex.Replace(
-                content, @"<CMD>.*?</CMD>", "", 
-                System.Text.RegularExpressions.RegexOptions.Singleline).Trim();
-            
-            if (string.IsNullOrWhiteSpace(cleanContent)) return;
-            
-            var entry = new DialogueEntry("assistant", cleanContent);
-            _shortTermMemory.Add(entry);
-            
-            Debug.Log($"<color=cyan>[Memory] Ìí¼ÓAIÏûÏ¢£¬µ±Ç°Token: {CurrentShortTermTokens}</color>");
-            
+            if (string.IsNullOrWhiteSpace(content))
+                return;
+
+            string cleanContent = Regex.Replace(content, @"<CMD>.*?</CMD>", string.Empty, RegexOptions.Singleline).Trim();
+            if (string.IsNullOrWhiteSpace(cleanContent))
+                return;
+
+            _shortTermMemory.Add(new DialogueEntry("assistant", cleanContent));
+            Debug.Log($"<color=cyan>[Memory] æ·»åŠ AIæ¶ˆæ¯ï¼Œå½“å‰Token: {CurrentShortTermTokens}</color>");
             CheckAndCompress();
         }
 
-        /// <summary>
-        /// ¼ì²éÊÇ·ñĞèÒªÑ¹Ëõ²¢Ö´ĞĞ
-        /// </summary>
         private void CheckAndCompress()
         {
-            if (_isSummarizing) return;
-            
-            // Ìõ¼ş1: Token³¬¹ıãĞÖµ
-            // Ìõ¼ş2: ÂÖÊı³¬¹ı×î´óÖµ
-            bool needCompress = CurrentShortTermTokens > compressionThreshold 
-                             || _shortTermMemory.Count > maxShortTermTurns * 2;
-            
+            if (_isSummarizing)
+                return;
+
+            bool needCompress =
+                CurrentShortTermTokens > compressionThreshold ||
+                _shortTermMemory.Count > maxShortTermTurns * 2;
+
             if (needCompress)
-            {
                 CompressOldestMemories();
-            }
         }
 
-        /// <summary>
-        /// Ñ¹Ëõ×î¾ÉµÄ¼ÇÒäµ½³¤ÆÚ¼ÇÒä
-        /// </summary>
         private void CompressOldestMemories()
         {
-            if (_shortTermMemory.Count < 4) return; // ÖÁÉÙ±£Áô2ÂÖ¶Ô»°
-            
-            // È¡³öÇ°°ë²¿·Ö½øĞĞÑ¹Ëõ
+            if (_shortTermMemory.Count < 4)
+                return;
+
             int compressCount = _shortTermMemory.Count / 2;
             var toCompress = _shortTermMemory.GetRange(0, compressCount);
-            
-            // Éú³É±¾µØÕªÒª£¨ÇáÁ¿¼¶·½°¸£©
-            var summary = GenerateLocalSummary(toCompress);
-            
-            // Ìí¼Óµ½³¤ÆÚ¼ÇÒä
+            LongTermMemory summary = GenerateLocalSummary(toCompress);
+
             _longTermMemories.Add(summary);
-            
-            // ÏŞÖÆ³¤ÆÚ¼ÇÒäÊıÁ¿
             while (_longTermMemories.Count > maxLongTermCount)
-            {
                 _longTermMemories.RemoveAt(0);
-            }
-            
-            // ´Ó¶ÌÆÚ¼ÇÒäÖĞÒÆ³ıÒÑÑ¹ËõµÄ²¿·Ö
+
             _shortTermMemory.RemoveRange(0, compressCount);
-            
-            Debug.Log($"<color=magenta>[Memory] Ñ¹ËõÍê³É: {compressCount}Ìõ -> ÕªÒª, Ê£ÓàToken: {CurrentShortTermTokens}</color>");
+            Debug.Log($"<color=magenta>[Memory] å‹ç¼©å®Œæˆ: {compressCount}æ¡ -> æ‘˜è¦, å‰©ä½™Token: {CurrentShortTermTokens}</color>");
         }
 
-        /// <summary>
-        /// ±¾µØÇáÁ¿¼¶ÕªÒªÉú³É£¨»ùÓÚ¹æÔòÌáÈ¡£©
-        /// </summary>
         private LongTermMemory GenerateLocalSummary(List<DialogueEntry> entries)
         {
-            var memory = new LongTermMemory();
-            memory.originalTurnCount = entries.Count / 2;
-            
-            var summaryBuilder = new StringBuilder();
-            summaryBuilder.Append("¡¾ÀúÊ·ÕªÒª¡¿");
-            
-            // ÌáÈ¡¹Ø¼üĞÅÏ¢
+            var memory = new LongTermMemory
+            {
+                originalTurnCount = Mathf.Max(1, entries.Count / 2)
+            };
+
             foreach (var entry in entries)
             {
+                if (entry == null || string.IsNullOrWhiteSpace(entry.content))
+                    continue;
+
                 if (entry.role == "user")
                 {
-                    // ÌáÈ¡Íæ¼ÒĞĞ¶¯¹Ø¼ü´Ê
                     string action = ExtractActionKeyword(entry.content);
-                    if (!string.IsNullOrEmpty(action))
-                    {
-                        memory.keyEvents.Add($"Íæ¼Ò:{action}");
-                    }
+                    if (!string.IsNullOrWhiteSpace(action))
+                        memory.keyEvents.Add($"ç©å®¶:{action}");
                 }
                 else if (entry.role == "assistant")
                 {
-                    // ÌáÈ¡ĞğÊÂÖĞµÄ¹Ø¼üÊÂ¼ş£¨¼ò»¯°æ£©
                     string keyEvent = ExtractKeyEvent(entry.content);
-                    if (!string.IsNullOrEmpty(keyEvent))
-                    {
+                    if (!string.IsNullOrWhiteSpace(keyEvent))
                         memory.keyEvents.Add(keyEvent);
-                    }
                 }
             }
-            
-            // ¹¹½¨ÕªÒªÎÄ±¾
+
             if (memory.keyEvents.Count > 0)
-            {
-                summaryBuilder.Append(string.Join("¡ú", memory.keyEvents));
-            }
+                memory.summary = $"ã€å†å²æ‘˜è¦ã€‘{string.Join(" -> ", memory.keyEvents)}";
             else
-            {
-                summaryBuilder.Append($"¾­ÀúÁË{memory.originalTurnCount}ÂÖÌ½Ë÷");
-            }
-            
-            memory.summary = summaryBuilder.ToString();
+                memory.summary = $"ã€å†å²æ‘˜è¦ã€‘ç»å†äº† {memory.originalTurnCount} è½®æ¢ç´¢ã€‚";
+
             return memory;
         }
 
-        /// <summary>
-        /// ´ÓÍæ¼ÒÊäÈëÌáÈ¡ĞĞ¶¯¹Ø¼ü´Ê
-        /// </summary>
         private string ExtractActionKeyword(string input)
         {
-            if (string.IsNullOrEmpty(input)) return null;
-            
-            // ¹Ø¼ü¶¯´ÊÄ£Ê½
-            string[] actionPatterns = { "¹¥»÷", "Ì½Ë÷", "¹Û²ì", "Ê¹ÓÃ", "Ç°Íù", "ÌÓÅÜ", "ĞİÏ¢", "ĞŞÁ¶", "¶Ô»°", "²É¼¯" };
-            
+            if (string.IsNullOrWhiteSpace(input))
+                return null;
+
+            string[] actionPatterns =
+            {
+                "æ”»å‡»", "æ¢ç´¢", "è§‚å¯Ÿ", "æŸ¥çœ‹", "ä½¿ç”¨", "å‰å¾€", "é€ƒè·‘", "ä¼‘æ¯", "ä¿®ç‚¼", "å¯¹è¯", "é‡‡é›†"
+            };
+
             foreach (var pattern in actionPatterns)
             {
                 if (input.Contains(pattern))
-                {
-                    // ·µ»Ø¼ò¶ÌÃèÊö
                     return input.Length > 15 ? input.Substring(0, 15) + "..." : input;
-                }
             }
-            
+
             return input.Length > 10 ? input.Substring(0, 10) + "..." : input;
         }
 
-        /// <summary>
-        /// ´ÓAI»Ø¸´ÌáÈ¡¹Ø¼üÊÂ¼ş
-        /// </summary>
         private string ExtractKeyEvent(string content)
         {
-            if (string.IsNullOrEmpty(content) || content.Length < 20) return null;
-            
-            // ¹Ø¼üÊÂ¼şÖ¸Ê¾´Ê
-            string[] eventIndicators = { "·¢ÏÖ", "ÔâÓö", "»ñµÃ", "ÊÜÉË", "ËÀÍö", "ÌÓÍÑ", "»÷°Ü", "Ñ§»á", "½øÈë", "Àë¿ª" };
-            
+            if (string.IsNullOrWhiteSpace(content) || content.Length < 8)
+                return null;
+
+            string[] eventIndicators =
+            {
+                "å‘ç°", "é­é‡", "è·å¾—", "å—ä¼¤", "é€ƒè„±", "å‡»è´¥", "å­¦ä¼š", "è¿›å…¥", "ç¦»å¼€", "å¼‚è±¡"
+            };
+
             foreach (var indicator in eventIndicators)
             {
-                int idx = content.IndexOf(indicator);
-                if (idx >= 0)
-                {
-                    int start = Math.Max(0, idx - 5);
-                    int length = Math.Min(20, content.Length - start);
-                    return content.Substring(start, length).Trim();
-                }
+                int index = content.IndexOf(indicator, StringComparison.Ordinal);
+                if (index < 0)
+                    continue;
+
+                int start = Math.Max(0, index - 5);
+                int length = Math.Min(20, content.Length - start);
+                return content.Substring(start, length).Trim();
             }
-            
+
             return null;
         }
 
-        /// <summary>
-        /// Í¨¹ıÔÆ¶ËAPIÉú³É¸ßÖÊÁ¿ÕªÒª£¨¿ÉÑ¡£©
-        /// </summary>
         public void RequestCloudSummary(List<DialogueEntry> entries, Action<string> onComplete)
         {
             if (_isSummarizing || entries == null || entries.Count == 0)
@@ -310,90 +243,88 @@ namespace Logic.Memory
                 onComplete?.Invoke(null);
                 return;
             }
-            
+
             _isSummarizing = true;
-            
-            // ¹¹½¨ÕªÒªÇëÇó
             var dialogueText = new StringBuilder();
             foreach (var entry in entries)
             {
-                string role = entry.role == "user" ? "Íæ¼Ò" : "ĞğÊÂ";
-                dialogueText.AppendLine($"{role}: {entry.content}");
+                if (entry == null)
+                    continue;
+
+                string roleName = entry.role == "user" ? "ç©å®¶" : "å™äº‹";
+                dialogueText.AppendLine($"{roleName}: {entry.content}");
             }
-            
-            string summaryPrompt = $@"Çë½«ÒÔÏÂ¶Ô»°ÀúÊ·Ñ¹ËõÎªÒ»¶Î¼ò¶ÌÕªÒª£¨50×ÖÒÔÄÚ£©£¬±£Áô¹Ø¼üÊÂ¼şºÍ×´Ì¬±ä»¯£º
 
-{dialogueText}
-
-ÒªÇó£º
-1. Ê¹ÓÃµÚÈıÈË³Æ
-2. Ö»±£Áô¹Ø¼üÇé½Ú×ªÕÛ
-3. Ö±½ÓÊä³öÕªÒª£¬²»ÒªÈÎºÎ½âÊÍ";
+            string prompt =
+                "è¯·å°†ä»¥ä¸‹å¯¹è¯å†å²å‹ç¼©æˆä¸€æ®µ 50 å­—ä»¥å†…çš„æ‘˜è¦ï¼Œä¿ç•™å…³é”®äº‹ä»¶ä¸çŠ¶æ€å˜åŒ–ï¼Œä½¿ç”¨ç¬¬ä¸‰äººç§°ç›´æ¥è¾“å‡ºæ‘˜è¦ï¼š\n\n" +
+                dialogueText;
 
             LLMService.Instance.PostStream(
-                "ÄãÊÇÒ»¸ö×¨ÒµµÄÎÄ±¾ÕªÒªÖúÊÖ¡£",
-                summaryPrompt,
-                onTokenReceived: null,  // ²»ĞèÒªÁ÷Ê½Êä³ö
-                onComplete: () => _isSummarizing = false
-            );
+                "ä½ æ˜¯ä¸“ä¸šçš„æ–‡æœ¬æ‘˜è¦åŠ©æ‰‹ã€‚",
+                prompt,
+                onTokenReceived: null,
+                onComplete: () =>
+                {
+                    _isSummarizing = false;
+                    onComplete?.Invoke(null);
+                });
         }
 
-        /// <summary>
-        /// ¹¹½¨°üº¬¼ÇÒäÉÏÏÂÎÄµÄÏûÏ¢Êı×é
-        /// </summary>
         public LLMService.Message[] BuildMessagesWithMemory(string systemPrompt, string userPrompt)
         {
-            var messages = new List<LLMService.Message>();
-            
-            // 1. ÏµÍ³ÌáÊ¾
-            messages.Add(new LLMService.Message { role = "system", content = systemPrompt });
-            
-            // 2. ³¤ÆÚ¼ÇÒä£¨×÷ÎªÏµÍ³ÉÏÏÂÎÄ²¹³ä£©
+            var messages = new List<LLMService.Message>
+            {
+                new LLMService.Message { role = "system", content = systemPrompt }
+            };
+
             if (_longTermMemories.Count > 0)
             {
-                var longTermContext = BuildLongTermContext();
-                messages.Add(new LLMService.Message 
-                { 
-                    role = "system", 
-                    content = $"¡¾³¤ÆÚ¼ÇÒä¡¿\n{longTermContext}" 
+                messages.Add(new LLMService.Message
+                {
+                    role = "system",
+                    content = $"ã€é•¿æœŸè®°å¿†ã€‘\n{BuildLongTermContext()}"
                 });
             }
-            
-            // 3. ¶ÌÆÚ¼ÇÒä£¨ÍêÕû¶Ô»°ÀúÊ·£©
-            foreach (var entry in _shortTermMemory)
+
+            var shortTermEntries = new List<DialogueEntry>();
+            int runningTokens = 0;
+            for (int i = _shortTermMemory.Count - 1; i >= 0; i--)
             {
-                messages.Add(new LLMService.Message 
-                { 
-                    role = entry.role, 
-                    content = entry.content 
+                DialogueEntry entry = _shortTermMemory[i];
+                if (entry == null)
+                    continue;
+
+                if (runningTokens + entry.tokenEstimate > maxShortTermTokens && shortTermEntries.Count > 0)
+                    break;
+
+                runningTokens += entry.tokenEstimate;
+                shortTermEntries.Insert(0, entry);
+            }
+
+            foreach (var entry in shortTermEntries)
+            {
+                messages.Add(new LLMService.Message
+                {
+                    role = entry.role,
+                    content = entry.content
                 });
             }
-            
-            // 4. µ±Ç°ÓÃ»§ÊäÈë
+
             messages.Add(new LLMService.Message { role = "user", content = userPrompt });
-            
             return messages.ToArray();
         }
 
-        /// <summary>
-        /// ¹¹½¨³¤ÆÚ¼ÇÒäÉÏÏÂÎÄ
-        /// </summary>
         private string BuildLongTermContext()
         {
             var builder = new StringBuilder();
-            
             for (int i = 0; i < _longTermMemories.Count; i++)
             {
-                var mem = _longTermMemories[i];
-                builder.AppendLine($"[»ØÒäÆ¬¶Î{i + 1}] {mem.summary}");
+                builder.AppendLine($"[å›å¿†ç‰‡æ®µ{i + 1}] {_longTermMemories[i].summary}");
             }
-            
-            return builder.ToString();
+
+            return builder.ToString().TrimEnd();
         }
 
-        /// <summary>
-        /// »ñÈ¡¼ÇÒä×´Ì¬¿ìÕÕ£¨ÓÃÓÚ´æµµ£©
-        /// </summary>
         public MemorySnapshot GetSnapshot()
         {
             return new MemorySnapshot
@@ -404,38 +335,45 @@ namespace Logic.Memory
             };
         }
 
-        /// <summary>
-        /// ´Ó¿ìÕÕ»Ö¸´¼ÇÒä×´Ì¬
-        /// </summary>
-        public void RestoreFromSnapshot(MemorySnapshot snapshot)
+        public List<DialogueEntry> GetRecentDialogueEntries()
         {
-            if (snapshot == null) return;
-            
-            _shortTermMemory = snapshot.shortTermMemory ?? new List<DialogueEntry>();
-            _longTermMemories = snapshot.longTermMemories ?? new List<LongTermMemory>();
-            _totalTurns = snapshot.totalTurns;
-            
-            Debug.Log($"[Memory] ÒÑ»Ö¸´¼ÇÒä: ¶ÌÆÚ{_shortTermMemory.Count}Ìõ, ³¤ÆÚ{_longTermMemories.Count}Ìõ");
+            return new List<DialogueEntry>(_shortTermMemory);
         }
 
-        /// <summary>
-        /// Çå¿ÕËùÓĞ¼ÇÒä£¨ĞÂÓÎÏ·Ê±µ÷ÓÃ£©
-        /// </summary>
+        public List<LongTermMemory> GetLongTermMemoryEntries()
+        {
+            return new List<LongTermMemory>(_longTermMemories);
+        }
+
+        public void RestoreFromSnapshot(MemorySnapshot snapshot)
+        {
+            _shortTermMemory.Clear();
+            _longTermMemories.Clear();
+            _totalTurns = 0;
+
+            if (snapshot == null)
+                return;
+
+            if (snapshot.shortTermMemory != null)
+                _shortTermMemory.AddRange(snapshot.shortTermMemory);
+            if (snapshot.longTermMemories != null)
+                _longTermMemories.AddRange(snapshot.longTermMemories);
+            _totalTurns = snapshot.totalTurns;
+
+            Debug.Log($"[Memory] å·²æ¢å¤è®°å¿†: çŸ­æœŸ{_shortTermMemory.Count}æ¡, é•¿æœŸ{_longTermMemories.Count}æ¡");
+        }
+
         public void ClearAll()
         {
             _shortTermMemory.Clear();
             _longTermMemories.Clear();
             _totalTurns = 0;
-            Debug.Log("[Memory] ¼ÇÒäÒÑÇå¿Õ");
+            Debug.Log("[Memory] è®°å¿†å·²æ¸…ç©º");
         }
 
-        /// <summary>
-        /// »ñÈ¡µ÷ÊÔĞÅÏ¢
-        /// </summary>
         public string GetDebugInfo()
         {
-            return $"¶ÌÆÚ: {_shortTermMemory.Count}Ìõ/{CurrentShortTermTokens}tokens | " +
-                   $"³¤ÆÚ: {_longTermMemories.Count}Ìõ | ×ÜÂÖÊı: {_totalTurns}";
+            return $"çŸ­æœŸ: {_shortTermMemory.Count}æ¡/{CurrentShortTermTokens} tokens | é•¿æœŸ: {_longTermMemories.Count}æ¡ | æ€»è½®æ•°: {_totalTurns}";
         }
     }
 }
