@@ -111,7 +111,7 @@ namespace Logic.Memory
             _shortTermMemory.Add(new DialogueEntry("user", content));
             _totalTurns++;
 
-            Debug.Log($"<color=yellow>[Memory] 添加用户消息，当前Token: {CurrentShortTermTokens}</color>");
+            Debug.LogFormat(LogType.Log, LogOption.NoStacktrace, null, "<color=yellow>[Memory] 添加用户消息，当前Token: {0}</color>", CurrentShortTermTokens);
             CheckAndCompress();
         }
 
@@ -125,7 +125,7 @@ namespace Logic.Memory
                 return;
 
             _shortTermMemory.Add(new DialogueEntry("assistant", cleanContent));
-            Debug.Log($"<color=cyan>[Memory] 添加AI消息，当前Token: {CurrentShortTermTokens}</color>");
+            Debug.LogFormat(LogType.Log, LogOption.NoStacktrace, null, "<color=cyan>[Memory] 添加AI消息，当前Token: {0}</color>", CurrentShortTermTokens);
             CheckAndCompress();
         }
 

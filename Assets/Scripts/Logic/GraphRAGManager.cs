@@ -109,8 +109,11 @@ namespace Logic.GraphRAG
             entity.discoveredAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
             _discoveredIds.Add(entityId);
 
-            Debug.Log($"<color=green>[GraphRAG] 发现新知识: {entity.name}</color>");
+            Debug.LogFormat(LogType.Log, LogOption.NoStacktrace, null, "<color=green>[GraphRAG] 发现新知识: {0}</color>", entity.name);
             EventCenter.Instance.Broadcast("OnKnowledgeDiscovered", entity);
+
+            string entityName = string.IsNullOrWhiteSpace(entity.name) ? "新知识" : entity.name.Trim();
+            EventCenter.Instance.Broadcast("OnCenterToast", $"知识图谱已解锁：{entityName}");
         }
 
         public List<KnowledgeEntity> SearchByName(string keyword)
@@ -457,7 +460,7 @@ namespace Logic.GraphRAG
             { tags = new List<string> { "辟谷", "果腹", "草药" } });
 
             AddEntity(new KnowledgeEntity("herb_migu", "迷谷", EntityType.Herb,
-                "招摇之山有木焉，其状如榖而黑理，其华四照，其名曰迷谷，佩之不迷。",
+                "招摇之山有木焉，其状如谷而黑理，其华四照，其名曰迷谷，佩之不迷。",
                 "山海经·南山经")
             { tags = new List<string> { "辨路", "避雾", "灵木" } });
 

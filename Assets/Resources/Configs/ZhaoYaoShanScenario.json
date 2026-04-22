@@ -1,11 +1,12 @@
-{
+﻿{
   "projectTitle": "键入佳境",
   "projectSubtitle": "山海经文字冒险",
   "systemTagline": "智能裁决 / 知识图谱",
-  "chapterTitle": "大荒蚀灵",
-  "openingNarration": "你从碎石与冷雾之间醒来。招摇山的晨风沿着山脊切过来，带着草木汁液和湿土翻出的清苦，像有东西贴在耳畔缓慢呼吸。抬眼望去，古木与断壁都被雾意吞了边角，唯有山腹深处偶尔闪过一点诡异的青白光华。",
-  "openingNotice": "当前决赛演示聚焦招摇山垂直切片：开场苏醒、环境观察与采集、异象或异兽遭遇。",
+  "chapterTitle": "大荒萤火",
+  "openingNarration": "你从碎石与冷雾之间醒来。招摇山的晨风沿着山脊切过，带着草木汁液和湿土翻出的清苦，像有东西贴在耳畔缓慢呼吸。抬眼望去，古木与断壁都被雾意吞去边角，唯有山腹深处偶尔闪过一点诡异的青白光华。",
+  "openingNotice": "",
   "environmentResourcePath": "Configs/ZhaoYaoShanEnvironment",
+  "itemLibraryResourcePath": "Configs/ZhaoYaoShanItemLibrary",
   "initialRole": {
     "name": "林渊",
     "roleType": "玩家",
@@ -28,7 +29,7 @@
     "weapon": "",
     "inventory": [
       "治疗药水",
-      "火折"
+      "青铜断剑"
     ],
     "equippedSkills": [
       "火球术",

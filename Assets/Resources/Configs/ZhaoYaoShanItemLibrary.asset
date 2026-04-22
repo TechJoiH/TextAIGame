@@ -1,0 +1,160 @@
+﻿%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 30c6ce4f6e6d46cfb59bc06ae2bc497e, type: 3}
+  m_Name: ZhaoYaoShanItemLibrary
+  m_EditorClassIdentifier: 
+  sceneId: loc_zhaoyao
+  items:
+  - templateId: healing_potion
+    displayName: 治疗药水
+    itemKind: 0
+    equipSlot: 0
+    stackable: 1
+    iconPath: Item/medicine
+    iconSprite: {fileID: 0}
+    allowedSceneId: loc_zhaoyao
+    templateDescription: 一小瓶随身药液，气味辛烈，适合在危急时止血疗伤。
+  - templateId: bronze_broken_sword
+    displayName: 青铜断剑
+    itemKind: 1
+    equipSlot: 5
+    stackable: 0
+    iconPath: Item/sword
+    iconSprite: {fileID: 0}
+    allowedSceneId: loc_zhaoyao
+    templateDescription: 剑身布满绿锈的残兵，仍保留着最基础的杀伤力。
+  - templateId: cloth_headband
+    displayName: 缚风头带
+    itemKind: 1
+    equipSlot: 1
+    stackable: 0
+    iconPath: Item/windhead
+    iconSprite: {fileID: 0}
+    allowedSceneId: loc_zhaoyao
+    templateDescription: 以旧布缠成的头带，能束住乱发，也能让人在山风里稳住心神。
+  - templateId: traveler_robe
+    displayName: 行山短褐
+    itemKind: 1
+    equipSlot: 2
+    stackable: 0
+    iconPath: Item/lowcloth
+    iconSprite: {fileID: 0}
+    allowedSceneId: loc_zhaoyao
+    templateDescription: 适合林地与山径穿行的短褐，旧而耐磨，能挡去几分潮寒。
+  - templateId: linen_pants
+    displayName: 麻布行裤
+    itemKind: 1
+    equipSlot: 3
+    stackable: 0
+    iconPath: Item/pant
+    iconSprite: {fileID: 0}
+    allowedSceneId: loc_zhaoyao
+    templateDescription: 粗麻缝成的行裤，便于踏草涉泥，在荆棘间也不易撕裂。
+  - templateId: grass_shoes
+    displayName: 草结轻履
+    itemKind: 1
+    equipSlot: 4
+    stackable: 0
+    iconPath: Item/shoe
+    iconSprite: {fileID: 0}
+    allowedSceneId: loc_zhaoyao
+    templateDescription: 以草纤与麻绳编成的轻履，踩在湿滑山路上更易借力。
+  - templateId: obsidian_butcher_knife
+    displayName: 墨玉庖刀
+    itemKind: 1
+    equipSlot: 5
+    stackable: 0
+    iconPath: Item/knif
+    iconSprite: {fileID: 0}
+    allowedSceneId: loc_zhaoyao
+    templateDescription: 刀身如墨玉，薄而锐利，既可庖解异兽，也足以近身护命。
+  - templateId: broken_shanhai_scroll
+    displayName: 残破山海图
+    itemKind: 3
+    equipSlot: 0
+    stackable: 0
+    iconPath: Item/map
+    iconSprite: {fileID: 0}
+    allowedSceneId: loc_zhaoyao
+    templateDescription: 边角残缺的古图，似乎仍残留着山川异兽的幽微气息。
+  - templateId: fire_tinder
+    displayName: 火折
+    itemKind: 4
+    equipSlot: 0
+    stackable: 1
+    iconPath: Item/huozhe
+    iconSprite: {fileID: 0}
+    allowedSceneId: loc_zhaoyao
+    templateDescription: 防潮处理过的火折，能在阴湿雾林里勉强留住一点火种。
+  - templateId: zhuyu_herb
+    displayName: 祝余
+    itemKind: 0
+    equipSlot: 0
+    stackable: 1
+    iconPath: Item/zhuyu
+    iconSprite: {fileID: 0}
+    allowedSceneId: loc_zhaoyao
+    templateDescription: 招摇山灵草，叶色微青，入口清苦，能稍缓饥乏并稳住气息。
+  - templateId: migu_branch
+    displayName: 迷谷枝
+    itemKind: 3
+    equipSlot: 0
+    stackable: 1
+    iconPath: Item/miguzhi
+    iconSprite: {fileID: 0}
+    allowedSceneId: loc_zhaoyao
+    templateDescription: 黑理幽青的灵木枝条，贴身携带时可帮助辨认雾中路径。
+  - templateId: dangkang_bone_soup
+    displayName: 当康骨汤
+    itemKind: 0
+    equipSlot: 0
+    stackable: 1
+    iconPath: Item/dangkangMeatSoup
+    iconSprite: {fileID: 0}
+    allowedSceneId: loc_zhaoyao
+    templateDescription: 以当康骨肉久炖成汤，油香厚重，入口后暖意会慢慢化开。
+  - templateId: wild_fennel
+    displayName: 野茴香
+    itemKind: 2
+    equipSlot: 0
+    stackable: 1
+    iconPath: Item/yehuixiang
+    iconSprite: {fileID: 0}
+    allowedSceneId: loc_zhaoyao
+    templateDescription: 生在荒林边缘的辛香草，少量入汤能压住兽肉腥气。
+  - templateId: dangkang_ribs
+    displayName: 当康肋排
+    itemKind: 2
+    equipSlot: 0
+    stackable: 1
+    iconPath: Item/dangkangmeat
+    iconSprite: {fileID: 0}
+    allowedSceneId: loc_zhaoyao
+    templateDescription: 肥瘦相间的当康肋排，纹理厚实，最适合炖煮或炙烤。
+  - templateId: dangkang_fang
+    displayName: 当康獠牙
+    itemKind: 2
+    equipSlot: 0
+    stackable: 1
+    iconPath: Item/dangkangteeth
+    iconSprite: {fileID: 0}
+    allowedSceneId: loc_zhaoyao
+    templateDescription: 弯曲厚重的獠牙，表面留有旧血与磨痕，可作战利或材料。
+  - templateId: dangkang_tallow
+    displayName: 当康脂膏
+    itemKind: 2
+    equipSlot: 0
+    stackable: 1
+    iconPath: Item/dangkangfat
+    iconSprite: {fileID: 0}
+    allowedSceneId: loc_zhaoyao
+    templateDescription: 从当康脂层中炼出的厚膏，既可入锅，也可做燃脂与防水涂层。

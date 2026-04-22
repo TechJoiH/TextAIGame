@@ -2,13 +2,14 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using LitJson;
+using Logic.Inventory;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
 public class ActionHintPanel : BasePanel
 {
-    [Header("需要在 Inspector 中绑定")]
+    [Header("Refs")]
     public Button[] actionBtns;
     public TMP_Text[] actionTexts;
     public Button closeBtn;
@@ -46,9 +47,11 @@ public class ActionHintPanel : BasePanel
 
         var state = GameLoop.Instance != null ? GameLoop.Instance.CurrentState : null;
         var envState = GameLoop.Instance != null ? GameLoop.Instance.CurrentEnvironment : null;
-        string knowledgeSeed = $"{envState?.locationName} {envState?.narrativeHint} {string.Join(" ", state?.equipment?.inventory ?? new List<string>())}";
+        var itemLibrary = GameLoop.Instance != null ? GameLoop.Instance.CurrentItemLibrary : null;
+        string inventorySeed = InventoryStateUtility.BuildInventoryPromptSummary(state, itemLibrary);
+        string knowledgeSeed = $"{envState?.locationName} {envState?.narrativeHint} {inventorySeed}";
         string knowledgeContext = Logic.GraphRAG.GraphRAGManager.Instance.BuildKnowledgeContext(knowledgeSeed);
-        string prompt = PromptBuilder.BuildHintPrompt(state, envState, knowledgeContext);
+        string prompt = PromptBuilder.BuildHintPrompt(state, envState, knowledgeContext, itemLibrary);
 
         string response = null;
         string statusMessage = null;
@@ -118,8 +121,7 @@ public class ActionHintPanel : BasePanel
 
         if (state?.attributes != null &&
             state.attributes.currentHealth <= Mathf.Max(35, state.attributes.maxHealth / 3) &&
-            state.equipment?.inventory != null &&
-            state.equipment.inventory.Any(item => item.Contains("药")))
+            InventoryStateUtility.HasInventoryItem(state, "药"))
         {
             hints.Add("使用治疗药水");
         }
@@ -140,7 +142,7 @@ public class ActionHintPanel : BasePanel
         if (envState.HasClue("deep_path_opened"))
             hints.Add("观察异光来源");
 
-        if (envState.HasClue("aberration_triggered") || envState.HasTag("异象迫近"))
+        if (envState.HasClue("aberration_triggered") || envState.HasTag("异象逼近"))
             hints.Add("留意异兽踪迹");
 
         if (state?.attributes != null && state.attributes.currentMana <= state.attributes.maxMana / 2)
@@ -195,7 +197,7 @@ public class ActionHintPanel : BasePanel
         var mainPanel = UIMgr.Instance.GetPanel<MainGamePanel>() ?? FindObjectOfType<MainGamePanel>();
         if (mainPanel == null)
         {
-            Debug.LogError("场景里找不到 MainGamePanel，无法发送建议行动。");
+            Debug.LogError("Scene 中找不到 MainGamePanel，无法发送建议行动。");
             HideMe();
             return;
         }
@@ -204,14 +206,9 @@ public class ActionHintPanel : BasePanel
             mainPanel.inputField.text = hint;
 
         if (mainPanel.sendButton != null)
-        {
-            Debug.Log($"发送建议行动: {hint}");
             mainPanel.sendButton.onClick.Invoke();
-        }
         else
-        {
             Debug.LogError("MainGamePanel 的 sendButton 未绑定，无法发送建议行动。");
-        }
 
         HideMe();
     }

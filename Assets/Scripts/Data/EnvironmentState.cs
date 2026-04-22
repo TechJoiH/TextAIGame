@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using StateData.Role;
 using UnityEngine;
@@ -8,9 +8,6 @@ namespace StateData.Environment
     public enum WeatherType { Clear, Foggy, Rainy, Stormy }
     public enum TimeOfDay { Dawn, Day, Dusk, Night }
 
-    /// <summary>
-    /// 可序列化的环境运行时状态，用于 Prompt 注入与存档恢复。
-    /// </summary>
     [Serializable]
     public sealed class EnvironmentState
     {
@@ -146,7 +143,7 @@ namespace StateData.Environment
                 nameof(WeatherType.Rainy) => "潮湿",
                 nameof(WeatherType.Stormy) => "狂风",
                 nameof(WeatherType.Clear) => "清朗",
-                _ => string.Empty
+                _ => string.Empty,
             };
         }
 
@@ -158,7 +155,7 @@ namespace StateData.Environment
                 nameof(TimeOfDay.Day) => "白昼",
                 nameof(TimeOfDay.Dusk) => "薄暮",
                 nameof(TimeOfDay.Night) => "夜色",
-                _ => string.Empty
+                _ => string.Empty,
             };
         }
     }
@@ -169,12 +166,13 @@ namespace StateData.Environment
         public string projectTitle = "键入佳境";
         public string projectSubtitle = "山海经文字冒险";
         public string systemTagline = "智能裁决 / 知识图谱";
-        public string chapterTitle = "大荒蚀灵";
+        public string chapterTitle = "大荒萤火";
         public string openingNarration =
             "你缓缓睁眼，晨雾正沿着山脊与松根游走。招摇山的风带着草木汁液的清苦，像某种活物在耳畔低伏呼吸。";
         public string openingNotice =
             "当前演示切片聚焦招摇山：环境观察、灵草采集与异象遭遇。";
         public string environmentResourcePath = "Configs/ZhaoYaoShanEnvironment";
+        public string itemLibraryResourcePath = "Configs/ZhaoYaoShanItemLibrary";
         public ScenarioRoleData initialRole = ScenarioRoleData.CreateDefault();
         public List<string> initialDiscoveredEntityIds = new List<string> { "loc_zhaoyao" };
 
@@ -192,9 +190,11 @@ namespace StateData.Environment
             if (string.IsNullOrWhiteSpace(systemTagline))
                 systemTagline = "智能裁决 / 知识图谱";
             if (string.IsNullOrWhiteSpace(chapterTitle))
-                chapterTitle = "大荒蚀灵";
+                chapterTitle = "大荒萤火";
             if (string.IsNullOrWhiteSpace(environmentResourcePath))
                 environmentResourcePath = "Configs/ZhaoYaoShanEnvironment";
+            if (string.IsNullOrWhiteSpace(itemLibraryResourcePath))
+                itemLibraryResourcePath = "Configs/ZhaoYaoShanItemLibrary";
 
             initialRole ??= ScenarioRoleData.CreateDefault();
             initialDiscoveredEntityIds ??= new List<string>();
@@ -229,7 +229,7 @@ namespace StateData.Environment
         public int loyalty;
         public int affection;
         public string weapon = "";
-        public List<string> inventory = new List<string> { "治疗药水", "火折" };
+        public List<string> inventory = new List<string> { "治疗药水", "青铜断剑" };
         public List<string> equippedSkills = new List<string> { "火球术", "御风诀" };
 
         public static ScenarioRoleData CreateDefault()
@@ -246,7 +246,7 @@ namespace StateData.Environment
                     name = name,
                     roleType = roleType,
                     race = race,
-                    faction = faction
+                    faction = faction,
                 },
                 attributes = new AttributeState
                 {
@@ -259,31 +259,33 @@ namespace StateData.Environment
                     maxMana = maxMana,
                     strength = strength,
                     agility = agility,
-                    intelligence = intelligence
+                    intelligence = intelligence,
                 },
                 cultivation = new CultivationState
                 {
                     cultivationSchool = cultivationSchool,
-                    cultivationStage = cultivationStage
+                    cultivationStage = cultivationStage,
                 },
                 social = new SocialState
                 {
                     loyalty = loyalty,
-                    affection = affection
+                    affection = affection,
                 },
                 equipment = new EquipmentState
                 {
                     weapon = weapon,
                     inventory = inventory != null ? new List<string>(inventory) : new List<string>(),
-                    equippedSkills = equippedSkills != null ? new List<string>(equippedSkills) : new List<string>()
+                    equippedSkills = equippedSkills != null ? new List<string>(equippedSkills) : new List<string>(),
+                    equipmentSlots = new EquipmentSlotsState(),
+                    inventoryEntries = new List<ItemInventoryEntry>(),
                 },
                 runtime = new RuntimeFlags
                 {
                     isAlive = true,
                     isCriticalState = false,
-                    hasMajorChange = false
+                    hasMajorChange = false,
                 },
-                statusEffects = new StatusEffectState()
+                statusEffects = new StatusEffectState(),
             };
         }
     }

@@ -1,13 +1,17 @@
-using UnityEngine;
-using UnityEngine.UI;
-using UnityEngine.Events;
-using StateData.Role;
-using StateData.Environment;
-using Logic.Memory;
-using TMPro;
+using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using Logic.Inventory;
+using Logic.Memory;
+using StateData.Environment;
+using StateData.Items;
+using StateData.Role;
+using TMPro;
+using UnityEngine;
+using UnityEngine.Events;
+using UnityEngine.UI;
 
 public class MainGamePanel : BasePanel
 {
@@ -22,136 +26,145 @@ public class MainGamePanel : BasePanel
     public Button historyButton;
     public Button hintButton;
     public Button buttonSet;
-    public Button knowledgeGraphButton;  // æ–°å¢ï¼šçŸ¥è¯†å›¾è°±æŒ‰é’®
+    public Button knowledgeGraphButton;
+    public Button characterButton;
+    public Button bagButton;
+
+    [Header("Panel Roots")]
+    public GameObject characterPanelRoot;
+    public GameObject bagPanelRoot;
+
+    [Header("Inventory Anchors")]
+    public RectTransform bagStartPosition;
+    public RectTransform equipmentStartPosition;
+    public GameObject itemIconPrefab;
+
+    [Header("Tooltip")]
+    public GameObject itemTooltipRoot;
+    public TMP_Text itemTooltipNameText;
+    public TMP_Text itemTooltipDetailText;
+    public TMP_Text itemTooltipText;
+
+    [Header("Bag Layout")]
+    public int bagRows = 3;
+    public int bagColumns = 8;
+    public float bagStepX = 124f;
+    public float bagStepY = 160f;
+    public Vector2 bagCellSize = new Vector2(92f, 112f);
+
+    [Header("Equipment Layout")]
+    public int equipmentSlotCount = 5;
+    public float equipmentStepX = 154f;
+    public Vector2 equipmentCellSize = new Vector2(96f, 110f);
 
     public event UnityAction<string> OnPlayerInput;
 
-    private string currentStoryContent = "";
+    private readonly List<InventoryItemView> activeItemViews = new List<InventoryItemView>();
+    private readonly Queue<string> centerToastQueue = new Queue<string>();
+    private string currentStoryContent = string.Empty;
     private bool inited;
+    private RoleState boundState;
+    private EnvironmentState boundEnvironment;
+    private SceneItemLibraryData boundItemLibrary;
+    private RectTransform centerToastRoot;
+    private TMP_Text centerToastText;
+    private CanvasGroup centerToastCanvasGroup;
+    private Coroutine centerToastCoroutine;
+
+    private const float TooltipMinWidth = 260f;
+    private const float TooltipMaxWidth = 420f;
+    private const float TooltipMaxHeight = 520f;
+    private const float TooltipPadding = 18f;
+    private const float TooltipSpacing = 10f;
+    private const float TooltipScreenMargin = 16f;
+    private const string CenterToastEventName = "OnCenterToast";
+    private const float CenterToastFadeDuration = 0.18f;
+    private const float CenterToastHoldDuration = 1.75f;
 
     public override void Init()
     {
         if (inited) return;
         inited = true;
 
+        AutoResolveReferences();
+        ApplyStatusTextPresentation();
+
         if (sendButton != null)
             sendButton.onClick.AddListener(OnSendClick);
-
         if (historyButton != null)
             historyButton.onClick.AddListener(OnHistoryClick);
-
         if (hintButton != null)
             hintButton.onClick.AddListener(OnHintClick);
         if (buttonSet != null)
             buttonSet.onClick.AddListener(OnSetClick);
-
-        // æ–°å¢ï¼šç»‘å®šçŸ¥è¯†å›¾è°±æŒ‰é’®
         if (knowledgeGraphButton != null)
             knowledgeGraphButton.onClick.AddListener(OnKnowledgeGraphClick);
+        if (characterButton != null)
+            characterButton.onClick.AddListener(OnCharacterClick);
+        if (bagButton != null)
+            bagButton.onClick.AddListener(OnBagClick);
 
         ApplyBranding();
+        ApplyInitialPanelVisibility();
+        HideItemTooltip();
+        EnsureCenterToastPresentation();
+        RegisterCenterToastListener();
     }
 
-    private void OnHistoryClick()
+    public void BindInventoryState(RoleState state, EnvironmentState environmentState, SceneItemLibraryData itemLibrary)
     {
-        // æ’­æ”¾æ‰“å¼€é¢æ¿çš„ç‰¹æ®ŠéŸ³æ•ˆ
-        if (AudioMgr.Instance != null)
-            AudioMgr.Instance.PlayPanelOpenSfx();
-
-        UIMgr.Instance.ShowPanel<HistoryPanel>();
+        boundState = state;
+        boundEnvironment = environmentState;
+        boundItemLibrary = itemLibrary;
+        RefreshInventoryViews();
     }
 
-    private void OnHintClick()
-    {
-        // æ’­æ”¾æ‰“å¼€é¢æ¿çš„ç‰¹æ®ŠéŸ³æ•ˆ
-        if (AudioMgr.Instance != null)
-            AudioMgr.Instance.PlayPanelOpenSfx();
-
-        UIMgr.Instance.ShowPanel<ActionHintPanel>();
-    }
-
-    /// <summary>
-    /// æ–°å¢ï¼šæ‰“å¼€çŸ¥è¯†å›¾è°±é¢æ¿
-    /// </summary>
-    private void OnKnowledgeGraphClick()
-    {
-        if (AudioMgr.Instance != null)
-            AudioMgr.Instance.PlayPanelOpenSfx();
-
-        UIMgr.Instance.ShowPanel<KnowledgeGraphPanel>();
-    }
-
-    private void OnSendClick()
-    {
-        if (inputField == null) return;
-        if (string.IsNullOrWhiteSpace(inputField.text)) return;
-
-        // æ’­æ”¾æ™®é€šç‚¹å‡»éŸ³æ•ˆ
-        if (AudioMgr.Instance != null)
-            AudioMgr.Instance.PlayClickSfx();
-
-        string input = inputField.text;
-        inputField.text = "";
-        OnPlayerInput?.Invoke(input);
-    }
-
-    private void OnSetClick()
-    {
-        // æ’­æ”¾æ‰“å¼€é¢æ¿çš„ç‰¹æ®ŠéŸ³æ•ˆ
-        if (AudioMgr.Instance != null)
-            AudioMgr.Instance.PlayPanelOpenSfx();
-
-        var panel = UIMgr.Instance.ShowPanel<SetPanel>();
-        if (panel != null)
-            panel.SetOpenFromGame(true);
-    }
-
-    // ã€ä¼˜åŒ–ã€‘æ·»åŠ é™æ€æ–‡æœ¬ï¼ˆç©å®¶æˆ–ç³»ç»Ÿæç¤ºï¼‰
     public void AppendText(string text, bool isPlayer)
     {
-        string color = isPlayer ? "#4E342E" : "#000000"; // ç©å®¶æ·±æ£•è‰²ï¼Œç³»ç»Ÿé»‘è‰²
+        text = NormalizeUIText(text);
+        string color = isPlayer ? "#4E342E" : "#000000";
+        string prefix = string.IsNullOrEmpty(currentStoryContent) ? string.Empty : "\n";
 
-        // é€»è¾‘ä¼˜åŒ–ï¼šå¦‚æœå½“å‰æ˜¯ç©ºçš„ï¼Œå°±ä¸åŠ æ¢è¡Œï¼›å¦åˆ™åœ¨å‰é¢åŠ ä¸€ä¸ªæ¢è¡Œï¼Œè€Œä¸æ˜¯å‰åéƒ½åŠ 
-        string prefix = string.IsNullOrEmpty(currentStoryContent) ? "" : "\n";
-
-        // ç»„åˆæ–‡æœ¬ï¼šåŠ ç²—ç©å®¶å‘è¨€ï¼Œå¢åŠ åŒºåˆ†åº¦
         if (isPlayer)
-        {
             currentStoryContent += $"{prefix}<color={color}><b> {text}</b></color>\n";
-        }
         else
-        {
             currentStoryContent += $"{prefix}<color={color}>{text}</color>";
-        }
 
         UpdateUIText();
     }
 
-    // ã€æµå¼ã€‘è¿½åŠ  Token
+    private static string NormalizeUIText(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return text;
+
+        return text
+            .Replace("ã€ç³»ç»Ÿã€?", "¡¾ÏµÍ³¡¿")
+            .Replace("ã€ç³»ç»Ÿã€", "¡¾ÏµÍ³¡¿")
+            .Replace("å·²è£…å¤‡ã€?", "ÒÑ×°±¸¡£")
+            .Replace("å·²å¸ä¸‹ã€?", "ÒÑĞ¶ÏÂ¡£");
+    }
+
     public void AppendStreamToken(string token)
     {
         currentStoryContent += token;
         UpdateUIText();
     }
 
-    // ã€æµå¼ã€‘ç»“æŸ
     public void FinishStream()
     {
-        // æµå¼ç»“æŸåï¼Œé¢å¤–è¿½åŠ ä¸€ä¸ªæ¢è¡Œï¼Œä¸ºä¸‹ä¸€è½®å¯¹è¯ç•™å‡ºç©ºé—´
         currentStoryContent += "\n";
         UpdateUIText();
     }
 
-    // ã€æ¸…æ´—ã€‘ç§»é™¤ CMD æŒ‡ä»¤
     public void RemoveCmdTagsFromUI()
     {
         if (storyText == null) return;
 
-        string pattern = @"<CMD>.*?</CMD>";
         currentStoryContent = System.Text.RegularExpressions.Regex.Replace(
             currentStoryContent,
-            pattern,
-            "",
+            @"<CMD>.*?</CMD>",
+            string.Empty,
             System.Text.RegularExpressions.RegexOptions.Singleline);
 
         UpdateUIText();
@@ -159,56 +172,101 @@ public class MainGamePanel : BasePanel
 
     public void UpdateStateDisplay(RoleState state)
     {
-        UpdateStateDisplay(state, GameLoop.Instance != null ? GameLoop.Instance.CurrentEnvironment : null);
+        UpdateStateDisplay(state, GameLoop.Instance != null ? GameLoop.Instance.CurrentEnvironment : null, GameLoop.Instance != null ? GameLoop.Instance.CurrentItemLibrary : null);
     }
 
     public void UpdateStateDisplay(RoleState state, EnvironmentState environmentState)
     {
+        UpdateStateDisplay(state, environmentState, GameLoop.Instance != null ? GameLoop.Instance.CurrentItemLibrary : null);
+    }
+
+    public void UpdateStateDisplay(RoleState state, EnvironmentState environmentState, SceneItemLibraryData itemLibrary)
+    {
         if (statusText == null || state == null) return;
 
+        ApplyStatusTextPresentation();
         environmentState ??= EnvironmentState.GetDefault();
         environmentState.EnsureCollections();
+        InventoryStateUtility.EnsureCompatibility(state, itemLibrary);
+        var derived = InventoryStateUtility.CalculateDerivedAttributes(state);
+        var equippedWeapon = state.equipment.equipmentSlots.GetSlot(EquipSlotType.Weapon);
+
+        if (Application.isPlaying)
+        {
+            string compactRoleName = TrimStatusText(state.identity?.name ?? "ÎŞÃûÂÃÈË", 10);
+            string compactWeaponName = TrimStatusText(equippedWeapon?.runtimeData?.name ?? "¿ÕÊÖ", 10);
+            string compactLocation = TrimStatusText(environmentState.locationName, 12);
+            string compactTagPreview = environmentState.dynamicTags != null && environmentState.dynamicTags.Count > 0
+                ? TrimStatusText(string.Join(" / ", environmentState.dynamicTags.Take(3)), 30)
+                : "ÔİÎŞ";
+            string compactObjectiveText = string.IsNullOrWhiteSpace(environmentState.currentObjective)
+                ? "×ÔÓÉÌ½Ë÷"
+                : TrimStatusText(environmentState.currentObjective, 24);
+
+            statusText.text =
+                $"½ÇÉ« <color=#8E6B3F>{compactRoleName}</color>  <color=#000000>Lv.{state.attributes.level}</color>  ÉúÃü <color=#FF5555>{state.attributes.currentHealth}/{derived.maxHealthTotal}</color>  ÁéÁ¦ <color=#55AAFF>{state.attributes.currentMana}/{derived.maxManaTotal}</color>\n" +
+                $"Á¦ <color=#B5651D>{derived.strengthTotal}</color>  Ãô <color=#6C8B3C>{derived.agilityTotal}</color>  ÖÇ <color=#5D7FB8>{derived.intelligenceTotal}</color>  ¹¥ <color=#6F3D1F>{derived.attackPower}</color>  Îä <color=#7A5F2A>{compactWeaponName}</color>\n" +
+                $"µØ <color=#FFAA00>{compactLocation}</color>  Ìì <color=#9EC8FF>{GetDisplayWeatherText(environmentState.weather)}</color>  Ê± <color=#B6E0FE>{GetDisplayTimeText(environmentState.timeOfDay)}</color>  Ä¿±ê <color=#D9B16A>{compactObjectiveText}</color>\n" +
+                $"±êÇ© <color=#8E6B3F>{compactTagPreview}</color>";
+            return;
+        }
+
+        if (Application.isPlaying)
+        {
+            string compactWeaponName = equippedWeapon?.runtimeData?.name ?? "¿ÕÊÖ";
+            string compactTagPreview = environmentState.dynamicTags != null && environmentState.dynamicTags.Count > 0
+                ? string.Join(" / ", environmentState.dynamicTags.Take(4))
+                : "ÔİÎŞ";
+            string compactObjectiveText = string.IsNullOrWhiteSpace(environmentState.currentObjective)
+                ? "×ÔÓÉÌ½Ë÷"
+                : environmentState.currentObjective;
+
+            statusText.text =
+                $"½ÇÉ«: <color=#8E6B3F>{state.identity?.name ?? "ÎŞÃûÂÃÈË"}</color>  Lv.{state.attributes.level}\n" +
+                $"ÉúÃü: <color=#FF5555>{state.attributes.currentHealth}/{derived.maxHealthTotal}</color>\n" +
+                $"ÁéÁ¦: <color=#55AAFF>{state.attributes.currentMana}/{derived.maxManaTotal}</color>\n" +
+                $"Á¦Á¿: <color=#B5651D>{derived.strengthTotal}</color>  " +
+                $"Ãô½İ: <color=#6C8B3C>{derived.agilityTotal}</color>  " +
+                $"ÖÇÁ¦: <color=#5D7FB8>{derived.intelligenceTotal}</color>\n" +
+                $"¹¥»÷: <color=#6F3D1F>{derived.attackPower}</color>  ÎäÆ÷: <color=#7A5F2A>{compactWeaponName}</color>\n" +
+                $"µØµã: <color=#FFAA00>{environmentState.locationName}</color>  ÌìÆø: <color=#9EC8FF>{GetDisplayWeatherText(environmentState.weather)}</color>  " +
+                $"Ê±¾°: <color=#B6E0FE>{GetDisplayTimeText(environmentState.timeOfDay)}</color>\n" +
+                $"Ä¿±ê: <color=#D9B16A>{compactObjectiveText}</color>\n" +
+                $"±êÇ©: <color=#8E6B3F>{compactTagPreview}</color>";
+            return;
+        }
+        string weaponName = equippedWeapon?.runtimeData?.name ?? "¿ÕÊÖ";
 
         string tagPreview = environmentState.dynamicTags != null && environmentState.dynamicTags.Count > 0
             ? string.Join(" / ", environmentState.dynamicTags.Take(4))
-            : "æš‚æ— ";
+            : "ÔİÎŞ";
         string objectiveText = string.IsNullOrWhiteSpace(environmentState.currentObjective)
-            ? "è‡ªç”±æ¢ç´¢"
+            ? "×ÔÓÉÌ½Ë÷"
             : environmentState.currentObjective;
 
         statusText.text =
-            $"å¥åº·åº¦: <color=#FF5555>{state.attributes.currentHealth}/{state.attributes.maxHealth}</color> | " +
-            $"çµåŠ›: <color=#55AAFF>{state.attributes.currentMana}/{state.attributes.maxMana}</color> | " +
-            $"å¢ƒåœ°: <color=#FFAA00>ã€{environmentState.locationName}ã€‘</color>\n" +
-            $"å¤©å€™: <color=#9EC8FF>{GetDisplayWeatherText(environmentState.weather)}</color> | " +
-            $"æ—¶è¾°: <color=#B6E0FE>{GetDisplayTimeText(environmentState.timeOfDay)}</color>\n" +
-            $"ç›®æ ‡: <color=#D9B16A>{objectiveText}</color>\n" +
-            $"æ ‡ç­¾: <color=#8E6B3F>{tagPreview}</color>";
+            $"½ÇÉ«: <color=#8E6B3F>{state.identity?.name ?? "ÎŞÃûÂÃÈË"}</color>  Lv.{state.attributes.level}\n" +
+            $"ÉúÃü: <color=#FF5555>{state.attributes.currentHealth}/{derived.maxHealthTotal}</color>  (»ù´¡ {derived.maxHealthBase} + ×°±¸ {derived.maxHealthBonus:+#;-#;0})\n" +
+            $"ÁéÁ¦: <color=#55AAFF>{state.attributes.currentMana}/{derived.maxManaTotal}</color>  (»ù´¡ {derived.maxManaBase} + ×°±¸ {derived.maxManaBonus:+#;-#;0})\n" +
+            $"Á¦Á¿: <color=#B5651D>{derived.strengthBase}+{derived.strengthBonus}={derived.strengthTotal}</color>  " +
+            $"Ãô½İ: <color=#6C8B3C>{derived.agilityBase}+{derived.agilityBonus}={derived.agilityTotal}</color>  " +
+            $"ÖÇÁ¦: <color=#5D7FB8>{derived.intelligenceBase}+{derived.intelligenceBonus}={derived.intelligenceTotal}</color>\n" +
+            $"¹¥»÷: <color=#6F3D1F>{derived.attackPower}</color>  ÎäÆ÷: <color=#7A5F2A>{weaponName}</color>\n" +
+            $"µØµã: <color=#FFAA00>{environmentState.locationName}</color>  ÌìÆø: <color=#9EC8FF>{GetDisplayWeatherText(environmentState.weather)}</color>  " +
+            $"Ê±¾°: <color=#B6E0FE>{GetDisplayTimeText(environmentState.timeOfDay)}</color>\n" +
+            $"Ä¿±ê: <color=#D9B16A>{objectiveText}</color>\n" +
+            $"±êÇ©: <color=#8E6B3F>{tagPreview}</color>";
     }
 
     public void ShowLoading(bool isLoading)
     {
         if (sendButton != null) sendButton.interactable = !isLoading;
         if (inputField != null) inputField.interactable = !isLoading;
-
-        if (historyButton != null) historyButton.interactable = !isLoading;
-        if (hintButton != null) hintButton.interactable = !isLoading;
-        if (knowledgeGraphButton != null) knowledgeGraphButton.interactable = !isLoading;  // æ–°å¢
-    }
-
-    private void UpdateUIText()
-    {
-        if (storyText != null)
-        {
-            storyText.text = currentStoryContent;
-
-            // å…³é”®ï¼šä¸è¦ç›´æ¥è°ƒç”¨ ScrollToBottomï¼Œå› ä¸º TMP çš„ç½‘æ ¼æ›´æ–°æ˜¯æ»åçš„
-            // å¿…é¡»å¼€å¯åç¨‹ç­‰å¾…è¿™ä¸€å¸§æ¸²æŸ“å®Œæ¯•å†æ»šï¼Œå¦åˆ™æ»šä¸åˆ°æœ€åº•ä¸‹
-            if (gameObject.activeInHierarchy)
-            {
-                StartCoroutine(ScrollToBottomCoroutine());
-            }
-        }
+        if (historyButton != null) historyButton.interactable = true;
+        if (hintButton != null) hintButton.interactable = true;
+        if (knowledgeGraphButton != null) knowledgeGraphButton.interactable = true;
+        if (characterButton != null) characterButton.interactable = true;
+        if (bagButton != null) bagButton.interactable = true;
     }
 
     public void ClearStory()
@@ -222,7 +280,7 @@ public class MainGamePanel : BasePanel
         if (string.IsNullOrEmpty(original) || replacement == null || string.IsNullOrEmpty(currentStoryContent))
             return;
 
-        int index = currentStoryContent.LastIndexOf(original, System.StringComparison.Ordinal);
+        int index = currentStoryContent.LastIndexOf(original, StringComparison.Ordinal);
         if (index < 0)
             return;
 
@@ -240,11 +298,9 @@ public class MainGamePanel : BasePanel
 
         if (snapshot?.longTermMemories != null && snapshot.longTermMemories.Count > 0)
         {
-            builder.AppendLine("<color=#B79253>ã€å·²æ¢å¤è®°å¿†æ‘˜è¦ã€‘</color>");
+            builder.AppendLine("<color=#B79253>¡¾ÒÑ»Ö¸´¼ÇÒäÕªÒª¡¿</color>");
             foreach (var memory in snapshot.longTermMemories)
-            {
                 builder.AppendLine($"<color=#7A5F2A>{memory.summary}</color>");
-            }
             builder.AppendLine();
         }
 
@@ -255,7 +311,7 @@ public class MainGamePanel : BasePanel
                 if (entry == null || string.IsNullOrWhiteSpace(entry.content))
                     continue;
 
-                string prefix = builder.Length == 0 ? "" : "\n";
+                string prefix = builder.Length == 0 ? string.Empty : "\n";
                 if (entry.role == "user")
                     builder.Append($"{prefix}<color=#4E342E><b> {entry.content}</b></color>\n");
                 else
@@ -265,7 +321,7 @@ public class MainGamePanel : BasePanel
 
         if (!string.IsNullOrWhiteSpace(systemNotice))
         {
-            string prefix = builder.Length == 0 ? "" : "\n";
+            string prefix = builder.Length == 0 ? string.Empty : "\n";
             builder.Append($"{prefix}<color=#C58F2B>{systemNotice}</color>");
         }
 
@@ -275,16 +331,950 @@ public class MainGamePanel : BasePanel
 
     public void ApplyBranding()
     {
-        SetButtonLabel(historyButton, "è®°å½•");
-        SetButtonLabel(hintButton, "æ¨è");
-        SetButtonLabel(knowledgeGraphButton, "çŸ¥è¯†å›¾è°±");
-        SetButtonLabel(buttonSet, "è®¾ç½®");
-        SetButtonLabel(sendButton, "é€å‡ºè¡ŒåŠ¨");
+        SetButtonLabel(historyButton, "¼ÇÂ¼");
+        SetButtonLabel(hintButton, "ÍÆ¼ö");
+        SetButtonLabel(knowledgeGraphButton, "ÖªÊ¶Í¼Æ×");
+        SetButtonLabel(buttonSet, "ÉèÖÃ");
+        SetButtonLabel(sendButton, "ËÍ³öĞĞ¶¯");
+        SetButtonLabel(characterButton, "ÈËÎï");
+        SetButtonLabel(bagButton, "±³°ü");
 
         if (inputField != null && inputField.placeholder is TMP_Text placeholder)
+            placeholder.text = "ÊäÈëĞĞ¶¯£¬ÀıÈç£º¹Û²ìÕĞÒ¡É½ÎíÖĞµÄ²İÄ¾";
+    }
+
+    private void OnHistoryClick()
+    {
+        AudioMgr.Instance?.PlayPanelOpenSfx();
+        UIMgr.Instance.ShowPanel<HistoryPanel>();
+    }
+
+    private void OnHintClick()
+    {
+        AudioMgr.Instance?.PlayPanelOpenSfx();
+        UIMgr.Instance.ShowPanel<ActionHintPanel>();
+    }
+
+    private void OnKnowledgeGraphClick()
+    {
+        AudioMgr.Instance?.PlayPanelOpenSfx();
+        UIMgr.Instance.ShowPanel<KnowledgeGraphPanel>();
+    }
+
+    private void OnSendClick()
+    {
+        if (inputField == null || string.IsNullOrWhiteSpace(inputField.text))
+            return;
+
+        AudioMgr.Instance?.PlayClickSfx();
+        string input = inputField.text;
+        inputField.text = string.Empty;
+        OnPlayerInput?.Invoke(input);
+    }
+
+    private void OnSetClick()
+    {
+        AudioMgr.Instance?.PlayPanelOpenSfx();
+        var panel = UIMgr.Instance.ShowPanel<SetPanel>();
+        if (panel != null)
+            panel.SetOpenFromGame(true);
+    }
+
+    private void OnCharacterClick()
+    {
+        AudioMgr.Instance?.PlayClickSfx();
+        TogglePanelActive(characterPanelRoot);
+    }
+
+    private void OnBagClick()
+    {
+        AudioMgr.Instance?.PlayClickSfx();
+        TogglePanelActive(bagPanelRoot);
+    }
+
+    private void TogglePanelActive(GameObject panelRoot)
+    {
+        if (panelRoot == null)
+            return;
+
+        panelRoot.SetActive(!panelRoot.activeSelf);
+        if (!panelRoot.activeSelf)
+            HideItemTooltip();
+    }
+
+    private void AutoResolveReferences()
+    {
+        characterPanelRoot ??= FindChildGameObject("PanelCharacter");
+        bagPanelRoot ??= FindChildGameObject("ImageBagBk");
+        bagStartPosition ??= FindChildRectTransform("BagOrigin");
+        equipmentStartPosition ??= FindChildRectTransform("CharacterOrigin");
+        itemTooltipRoot = ResolveTooltipRootInstance(itemTooltipRoot);
+
+        if (characterPanelRoot == null && statusText != null)
+            characterPanelRoot = statusText.transform.parent != null ? statusText.transform.parent.gameObject : null;
+        if (bagPanelRoot == null && bagStartPosition != null)
+            bagPanelRoot = bagStartPosition.parent != null ? bagStartPosition.parent.gameObject : null;
+
+        if (itemTooltipRoot != null)
         {
-            placeholder.text = "è¾“å…¥è¡ŒåŠ¨ï¼Œä¾‹å¦‚ï¼šè§‚å¯Ÿæ‹›æ‘‡å±±é›¾ä¸­çš„è‰æœ¨";
+            var tooltipTexts = itemTooltipRoot.GetComponentsInChildren<TMP_Text>(true);
+
+            if (itemTooltipNameText == null)
+                itemTooltipNameText = FindTooltipText(tooltipTexts, "name");
+
+            if (itemTooltipDetailText == null)
+                itemTooltipDetailText = FindTooltipText(tooltipTexts, "detail", "desc", "info");
+
+            if (itemTooltipText == null)
+                itemTooltipText = tooltipTexts.FirstOrDefault();
+
+            if (itemTooltipNameText == null && itemTooltipDetailText == null)
+                itemTooltipDetailText = itemTooltipText;
         }
+
+        ApplyTooltipPresentation();
+    }
+
+    private GameObject ResolveTooltipRootInstance(GameObject tooltipReference)
+    {
+        var existingTooltip = FindChildGameObject("ItemTooltip");
+        if (existingTooltip != null && existingTooltip.scene.IsValid() && existingTooltip.scene.isLoaded)
+            return existingTooltip;
+
+        if (tooltipReference == null)
+            tooltipReference = existingTooltip;
+
+        if (tooltipReference == null)
+            return null;
+
+        if (tooltipReference.scene.IsValid() && tooltipReference.scene.isLoaded)
+            return tooltipReference;
+
+        var parent = transform as RectTransform;
+        var instance = Instantiate(tooltipReference, parent, false);
+        instance.name = tooltipReference.name;
+        instance.SetActive(false);
+        return instance;
+    }
+
+    private void ApplyTooltipPresentation()
+    {
+        if (itemTooltipRoot == null)
+            return;
+
+        var canvasGroup = itemTooltipRoot.GetComponent<CanvasGroup>();
+        if (canvasGroup == null)
+            canvasGroup = itemTooltipRoot.AddComponent<CanvasGroup>();
+
+        canvasGroup.interactable = false;
+        canvasGroup.blocksRaycasts = false;
+
+        var graphics = itemTooltipRoot.GetComponentsInChildren<Graphic>(true);
+        foreach (var graphic in graphics)
+        {
+            if (graphic != null)
+                graphic.raycastTarget = false;
+        }
+
+        TMP_FontAsset fallbackFont = storyText != null ? storyText.font : statusText != null ? statusText.font : null;
+
+        // ²»ÔÙÔÚÔËĞĞÊ±Ç¿ÖÆÉèÖÃ×ÖºÅ/×Ô¶¯Ëõ·Å£»½ö±£ÁôºÚÉ«Óë»ù´¡½»»¥ÊôĞÔ¡£
+        ApplyTooltipTextNonSizingPresentation(itemTooltipNameText, fallbackFont);
+        ApplyTooltipTextNonSizingPresentation(itemTooltipDetailText, fallbackFont);
+        ApplyTooltipTextNonSizingPresentation(itemTooltipText, fallbackFont);
+    }
+
+    private static void ApplyTooltipTextNonSizingPresentation(TMP_Text text, TMP_FontAsset fallbackFont)
+    {
+        if (text == null)
+            return;
+
+        text.color = Color.black; // ±£Áô£ºÎÄ×ÖÎªºÚÉ«
+        text.raycastTarget = false;
+        text.richText = false;
+
+        if (fallbackFont != null)
+            text.font = fallbackFont;
+    }
+
+    private void ApplyStatusTextPresentation()
+    {
+        if (statusText == null)
+            return;
+
+        statusText.enableAutoSizing = true;
+        statusText.fontSizeMax = 24f;
+        statusText.fontSizeMin = 14f;
+        statusText.enableWordWrapping = false;
+        statusText.overflowMode = TextOverflowModes.Overflow;
+        statusText.alignment = TextAlignmentOptions.TopLeft;
+        statusText.lineSpacing = -10f;
+        statusText.characterSpacing = 0f;
+        statusText.margin = new Vector4(8f, 6f, 8f, 6f);
+        statusText.color = Color.black;
+        statusText.raycastTarget = false;
+    }
+
+    private void ConfigureTooltipTextAppearance(TMP_Text text, TMP_FontAsset fallbackFont, bool isTitle)
+    {
+        if (text == null)
+            return;
+
+        text.color = Color.black;
+        text.enableAutoSizing = false;
+        text.fontSize = isTitle ? 30f : 18f;
+        text.fontSizeMax = text.fontSize;
+        text.fontSizeMin = text.fontSize;
+        text.enableWordWrapping = true;
+        text.overflowMode = TextOverflowModes.Truncate;
+        text.raycastTarget = false;
+        text.richText = false;
+
+        if (fallbackFont != null)
+            text.font = fallbackFont;
+    }
+
+    private void ApplyInitialPanelVisibility()
+    {
+        if (characterPanelRoot != null)
+            characterPanelRoot.SetActive(false);
+
+        if (bagPanelRoot != null)
+            bagPanelRoot.SetActive(false);
+    }
+
+    private void EnsureCenterToastPresentation()
+    {
+        if (centerToastRoot == null)
+            centerToastRoot = FindChildRectTransform("CenterToastRoot");
+
+        if (centerToastRoot == null)
+            centerToastRoot = CreateCenterToastRoot();
+
+        if (centerToastRoot == null)
+            return;
+
+        centerToastCanvasGroup = centerToastRoot.GetComponent<CanvasGroup>();
+        if (centerToastCanvasGroup == null)
+            centerToastCanvasGroup = centerToastRoot.gameObject.AddComponent<CanvasGroup>();
+
+        centerToastCanvasGroup.alpha = 0f;
+        centerToastCanvasGroup.interactable = false;
+        centerToastCanvasGroup.blocksRaycasts = false;
+
+        if (centerToastText == null)
+            centerToastText = centerToastRoot.GetComponentInChildren<TMP_Text>(true);
+
+        if (centerToastText != null)
+        {
+            centerToastText.color = Color.white;
+            centerToastText.enableAutoSizing = true;
+            centerToastText.fontSizeMax = 30f;
+            centerToastText.fontSizeMin = 18f;
+            centerToastText.enableWordWrapping = true;
+            centerToastText.overflowMode = TextOverflowModes.Overflow;
+            centerToastText.alignment = TextAlignmentOptions.Center;
+            centerToastText.raycastTarget = false;
+            centerToastText.richText = false;
+
+            TMP_FontAsset fallbackFont = storyText != null ? storyText.font : statusText != null ? statusText.font : null;
+            if (fallbackFont != null)
+                centerToastText.font = fallbackFont;
+        }
+
+        UpdateCenterToastLayout();
+        centerToastRoot.gameObject.SetActive(false);
+    }
+
+    private RectTransform CreateCenterToastRoot()
+    {
+        var toastObject = new GameObject("CenterToastRoot", typeof(RectTransform), typeof(CanvasGroup), typeof(Image));
+        toastObject.transform.SetParent(transform, false);
+
+        var toastRect = toastObject.GetComponent<RectTransform>();
+        toastRect.anchorMin = new Vector2(0.5f, 0.5f);
+        toastRect.anchorMax = new Vector2(0.5f, 0.5f);
+        toastRect.pivot = new Vector2(0.5f, 0.5f);
+        toastRect.anchoredPosition = new Vector2(0f, 36f);
+        toastRect.sizeDelta = new Vector2(760f, 132f);
+
+        var background = toastObject.GetComponent<Image>();
+        background.sprite = null;
+        background.type = Image.Type.Simple;
+        background.color = new Color(0.09f, 0.07f, 0.04f, 0.86f);
+        background.raycastTarget = false;
+
+        var textObject = new GameObject("CenterToastText", typeof(RectTransform), typeof(TextMeshProUGUI));
+        textObject.transform.SetParent(toastObject.transform, false);
+
+        var textRect = textObject.GetComponent<RectTransform>();
+        textRect.anchorMin = Vector2.zero;
+        textRect.anchorMax = Vector2.one;
+        textRect.offsetMin = new Vector2(32f, 22f);
+        textRect.offsetMax = new Vector2(-32f, -22f);
+
+        centerToastText = textObject.GetComponent<TextMeshProUGUI>();
+        centerToastText.text = string.Empty;
+
+        return toastRect;
+    }
+
+    private void UpdateCenterToastLayout()
+    {
+        if (centerToastRoot == null)
+            return;
+
+        RectTransform panelRect = transform as RectTransform;
+        float availableWidth = panelRect != null && panelRect.rect.width > 0f ? panelRect.rect.width : Screen.width;
+        float toastWidth = Mathf.Clamp(availableWidth - 96f, 320f, 760f);
+        float toastHeight = toastWidth <= 420f ? 116f : 132f;
+        centerToastRoot.sizeDelta = new Vector2(toastWidth, toastHeight);
+    }
+
+    private void RegisterCenterToastListener()
+    {
+        EventCenter.Instance.RemoveListener<string>(CenterToastEventName, HandleCenterToastRequested);
+        EventCenter.Instance.AddListener<string>(CenterToastEventName, HandleCenterToastRequested);
+    }
+
+    private void UnregisterCenterToastListener()
+    {
+        EventCenter.Instance.RemoveListener<string>(CenterToastEventName, HandleCenterToastRequested);
+    }
+
+    private void HandleCenterToastRequested(string message)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+            return;
+
+        centerToastQueue.Enqueue(message.Trim());
+        if (centerToastCoroutine == null && gameObject.activeInHierarchy)
+            centerToastCoroutine = StartCoroutine(PlayCenterToastQueue());
+    }
+
+    private IEnumerator PlayCenterToastQueue()
+    {
+        while (centerToastQueue.Count > 0)
+            yield return PlayCenterToast(centerToastQueue.Dequeue());
+
+        centerToastCoroutine = null;
+    }
+
+    private IEnumerator PlayCenterToast(string message)
+    {
+        EnsureCenterToastPresentation();
+        if (centerToastRoot == null || centerToastText == null || centerToastCanvasGroup == null)
+            yield break;
+
+        centerToastText.text = message;
+        centerToastRoot.gameObject.SetActive(true);
+        centerToastRoot.SetAsLastSibling();
+
+        Vector3 hiddenScale = new Vector3(0.94f, 0.94f, 1f);
+        Vector3 shownScale = Vector3.one;
+
+        yield return AnimateCenterToast(0f, 1f, hiddenScale, shownScale);
+        yield return new WaitForSecondsRealtime(CenterToastHoldDuration);
+        yield return AnimateCenterToast(1f, 0f, shownScale, hiddenScale);
+
+        centerToastRoot.gameObject.SetActive(false);
+    }
+
+    private IEnumerator AnimateCenterToast(float fromAlpha, float toAlpha, Vector3 fromScale, Vector3 toScale)
+    {
+        float elapsed = 0f;
+        centerToastCanvasGroup.alpha = fromAlpha;
+        centerToastRoot.localScale = fromScale;
+
+        while (elapsed < CenterToastFadeDuration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            float progress = Mathf.Clamp01(elapsed / CenterToastFadeDuration);
+            centerToastCanvasGroup.alpha = Mathf.Lerp(fromAlpha, toAlpha, progress);
+            centerToastRoot.localScale = Vector3.LerpUnclamped(fromScale, toScale, progress);
+            yield return null;
+        }
+
+        centerToastCanvasGroup.alpha = toAlpha;
+        centerToastRoot.localScale = toScale;
+    }
+
+    private void UpdateUIText()
+    {
+        if (storyText == null)
+            return;
+
+        storyText.text = currentStoryContent;
+        if (gameObject.activeInHierarchy)
+            StartCoroutine(ScrollToBottomCoroutine());
+    }
+
+    private IEnumerator ScrollToBottomCoroutine()
+    {
+        yield return new WaitForEndOfFrame();
+        if (scrollRect != null)
+            scrollRect.verticalNormalizedPosition = 0f;
+    }
+
+    private void RefreshInventoryViews()
+    {
+        ClearSpawnedItemViews();
+        HideItemTooltip();
+
+        if (boundState == null)
+            return;
+
+        InventoryStateUtility.EnsureCompatibility(boundState, boundItemLibrary);
+
+        for (int i = 0; i < boundState.equipment.inventoryEntries.Count && i < bagRows * bagColumns; i++)
+        {
+            int row = i / bagColumns;
+            int col = i % bagColumns;
+            Vector2 position = GetBagPosition(row, col);
+            var entry = boundState.equipment.inventoryEntries[i];
+            var template = InventoryStateUtility.ResolveTemplate(boundItemLibrary, entry);
+            SpawnItemView(position, bagCellSize, entry, template, false, EquipSlotType.None, i);
+        }
+
+        for (int i = 0; i < equipmentSlotCount && i < InventoryStateUtility.DefaultEquipOrder.Length; i++)
+        {
+            EquipSlotType slotType = InventoryStateUtility.DefaultEquipOrder[i];
+            var entry = boundState.equipment.equipmentSlots.GetSlot(slotType);
+            if (entry == null)
+                continue;
+
+            var template = InventoryStateUtility.ResolveTemplate(boundItemLibrary, entry);
+            SpawnItemView(GetEquipmentPosition(i), equipmentCellSize, entry, template, true, slotType, -1);
+        }
+    }
+
+    private void SpawnItemView(
+        Vector2 anchoredPosition,
+        Vector2 cellSize,
+        ItemInventoryEntry entry,
+        ItemTemplateData template,
+        bool isEquipped,
+        EquipSlotType slotType,
+        int inventoryIndex)
+    {
+        RectTransform parent = ResolveParentRoot(isEquipped);
+        RectTransform anchorSource = isEquipped ? equipmentStartPosition : bagStartPosition;
+        if (parent == null || anchorSource == null || entry == null)
+            return;
+
+        GameObject viewObject;
+        InventoryItemView view;
+        if (itemIconPrefab != null)
+        {
+            viewObject = Instantiate(itemIconPrefab, parent, false);
+            view = viewObject.GetComponent<InventoryItemView>() ?? viewObject.AddComponent<InventoryItemView>();
+        }
+        else
+        {
+            view = InventoryItemView.CreateFallback(parent, anchorSource);
+            viewObject = view.gameObject;
+        }
+
+        RectTransform rectTransform = viewObject.GetComponent<RectTransform>();
+        if (rectTransform == null)
+            rectTransform = viewObject.AddComponent<RectTransform>();
+
+        rectTransform.anchorMin = anchorSource.anchorMin;
+        rectTransform.anchorMax = anchorSource.anchorMax;
+        rectTransform.pivot = new Vector2(0.5f, 0.5f);
+        rectTransform.anchoredPosition = anchoredPosition;
+        rectTransform.sizeDelta = cellSize;
+
+        view.Bind(
+            entry,
+            template,
+            isEquipped,
+            OnItemViewClicked,
+            OnItemViewHoverEnter,
+            OnItemViewHoverExit,
+            slotType,
+            inventoryIndex);
+
+        activeItemViews.Add(view);
+    }
+
+    private void OnItemViewClicked(InventoryItemView itemView)
+    {
+        if (boundState == null || itemView == null)
+            return;
+
+        AudioMgr.Instance?.PlayClickSfx();
+        OnItemViewHoverEnter(itemView);
+
+        string message = null;
+        bool changed = false;
+
+        if (itemView.IsEquipped)
+        {
+            changed = InventoryStateUtility.TryUnequipSlot(boundState, itemView.EquipSlotType, boundItemLibrary, out message);
+            if (changed)
+                message = $"{itemView.DisplayName} ÒÑĞ¶ÏÂ¡£";
+        }
+        else if (itemView.Template != null && itemView.Template.IsEquipment)
+        {
+            changed = InventoryStateUtility.TryEquipInventoryItem(boundState, itemView.InventoryIndex, boundItemLibrary, out message);
+            if (changed)
+                message = $"{itemView.DisplayName} ÒÑ×°±¸¡£";
+        }
+
+        else
+        {
+            changed = TryUseInventoryItemFromUI(itemView, out message);
+        }
+
+        if (!string.IsNullOrWhiteSpace(message))
+            AppendText($"<color=#C58F2B>¡¾ÏµÍ³¡¿{message}</color>", false);
+
+        if (!changed)
+            return;
+
+        UpdateStateDisplay(boundState, boundEnvironment, boundItemLibrary);
+        RefreshInventoryViews();
+    }
+
+    private bool TryUseInventoryItemFromUI(InventoryItemView itemView, out string message)
+    {
+        message = null;
+        if (boundState == null || itemView?.Entry == null)
+        {
+            message = "Ä¿±êÎïÆ·²»´æÔÚ¡£";
+            return false;
+        }
+
+        boundEnvironment ??= EnvironmentState.GetDefault();
+        boundEnvironment.EnsureCollections();
+        InventoryStateUtility.EnsureCompatibility(boundState, boundItemLibrary);
+
+        ItemInventoryEntry entry = itemView.Entry;
+        ItemTemplateData template = itemView.Template ?? InventoryStateUtility.ResolveTemplate(boundItemLibrary, entry);
+        string displayName = entry.runtimeData?.name ?? template?.displayName ?? entry.templateId;
+        if (string.IsNullOrWhiteSpace(displayName))
+        {
+            message = "¸ÃÎïÆ·ĞÅÏ¢²»ÍêÕû£¬ÔİÊ±ÎŞ·¨Ê¹ÓÃ¡£";
+            return false;
+        }
+
+        if (ContainsItemKeyword(displayName, "ÖÎÁÆÒ©Ë®"))
+        {
+            if (!TryConsumeExactInventoryEntry(entry))
+            {
+                message = "ÖÎÁÆÒ©Ë®²»´æÔÚ»òÒÑ±»Ê¹ÓÃ¡£";
+                return false;
+            }
+
+            int restoredHealth = Mathf.Min(18, InventoryStateUtility.CalculateDerivedAttributes(boundState).maxHealthTotal - boundState.attributes.currentHealth);
+            boundState.attributes.currentHealth += restoredHealth;
+            boundEnvironment.AddTag("Ò©Æø»ØÅ¯");
+            InventoryStateUtility.NormalizeResourceCaps(boundState, InventoryStateUtility.CalculateDerivedAttributes(boundState));
+            message = $"·şÏÂÖÎÁÆÒ©Ë®£¬ÉúÃü»Ö¸´ +{restoredHealth}";
+            return true;
+        }
+
+        if (ContainsItemKeyword(displayName, "×£Óà"))
+        {
+            if (!TryConsumeExactInventoryEntry(entry))
+            {
+                message = "×£Óà²»´æÔÚ»òÒÑ±»Ê¹ÓÃ¡£";
+                return false;
+            }
+
+            DerivedAttributeState derived = InventoryStateUtility.CalculateDerivedAttributes(boundState);
+            int restoredHealth = Mathf.Min(6, derived.maxHealthTotal - boundState.attributes.currentHealth);
+            int restoredMana = Mathf.Min(6, derived.maxManaTotal - boundState.attributes.currentMana);
+            boundState.attributes.currentHealth += restoredHealth;
+            boundState.attributes.currentMana += restoredMana;
+            boundEnvironment.AddTag("Ê³²İ»Ø¸Ê");
+            boundEnvironment.currentObjective = "ÌåÁ¦ÉÔ¶¨£¬¿ÉÒÔ¼ÌĞø¹Û²ì»òÉîÈëÃÔÎí¡£";
+            InventoryStateUtility.NormalizeResourceCaps(boundState, InventoryStateUtility.CalculateDerivedAttributes(boundState));
+            message = $"ÑÊÏÂ×£ÓàºóÆøÏ¢ÉÔ¶¨£¬ÉúÃü +{restoredHealth}£¬ÁéÁ¦ +{restoredMana}";
+            return true;
+        }
+
+        if (ContainsItemKeyword(displayName, "ÃÔ¹È"))
+        {
+            boundEnvironment.RemoveTag("ÃÔÊ§·½Ïò");
+            boundEnvironment.AddTag("ÃÔ¹ÈÖ¸Â·");
+            boundEnvironment.currentObjective = "ÑØÎí¾¶ÉîÈë£¬¹Û²ìÇà°×Òì¹âµÄÀ´Ô´¡£";
+            message = "ÅåÉÏÃÔ¹Èºó£¬ÎíÖĞµÄÂ·¾¶ÂÖÀªÖğ½¥ÇåÎú¡£";
+            return true;
+        }
+
+        if (template == null || template.itemKind != ItemKind.Consumable)
+        {
+            message = "¸ÃÎïÆ·µ±Ç°ÎŞ·¨Ö±½ÓÊ¹ÓÃ¡£";
+            return false;
+        }
+
+        if (!TryConsumeExactInventoryEntry(entry))
+        {
+            message = "¸ÃÎïÆ·²»´æÔÚ»òÒÑ±»Ê¹ÓÃ¡£";
+            return false;
+        }
+
+        DerivedAttributeState genericDerived = InventoryStateUtility.CalculateDerivedAttributes(boundState);
+        int genericHealth = 0;
+        int genericMana = 0;
+        if (entry.runtimeData?.statModifiers != null)
+        {
+            foreach (var modifier in entry.runtimeData.statModifiers)
+            {
+                if (modifier == null || string.IsNullOrWhiteSpace(modifier.statKey) || modifier.value <= 0)
+                    continue;
+
+                string statKey = modifier.statKey.Trim().ToLowerInvariant();
+                if (statKey == "max_health")
+                    genericHealth += modifier.value;
+                else if (statKey == "max_mana")
+                    genericMana += modifier.value;
+            }
+        }
+
+        genericHealth = Mathf.Min(genericHealth, genericDerived.maxHealthTotal - boundState.attributes.currentHealth);
+        genericMana = Mathf.Min(genericMana, genericDerived.maxManaTotal - boundState.attributes.currentMana);
+        boundState.attributes.currentHealth += genericHealth;
+        boundState.attributes.currentMana += genericMana;
+        InventoryStateUtility.NormalizeResourceCaps(boundState, InventoryStateUtility.CalculateDerivedAttributes(boundState));
+        boundEnvironment.AddTag("ÎïÆ·ÒÑÊ¹ÓÃ");
+
+        if (genericHealth > 0 || genericMana > 0)
+        {
+            message = $"{displayName} ÒÑÊ¹ÓÃ£¬ÉúÃü +{genericHealth}£¬ÁéÁ¦ +{genericMana}";
+        }
+        else
+        {
+            message = string.IsNullOrWhiteSpace(entry.runtimeData?.effectText)
+                ? displayName + " ÒÑÊ¹ÓÃ¡£"
+                : displayName + " ÒÑÊ¹ÓÃ£º" + entry.runtimeData.effectText;
+        }
+
+        return true;
+    }
+
+    private bool TryConsumeExactInventoryEntry(ItemInventoryEntry entry)
+    {
+        if (boundState == null || entry == null)
+            return false;
+
+        return InventoryStateUtility.TryRemoveItem(
+            boundState,
+            entry.runtimeData?.instanceId,
+            null,
+            1,
+            out _);
+    }
+
+    private static bool ContainsItemKeyword(string source, string keyword)
+    {
+        return !string.IsNullOrWhiteSpace(source) &&
+               !string.IsNullOrWhiteSpace(keyword) &&
+               source.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0;
+    }
+
+    private void OnItemViewHoverEnter(InventoryItemView itemView)
+    {
+        if (itemTooltipRoot == null || itemView == null)
+            return;
+
+        string title = BuildTooltipTitle(itemView.Entry, itemView.Template);
+        string detail = BuildCompactTooltipDetail(itemView.Entry, itemView.Template);
+        bool hasBoundTooltipText = itemTooltipNameText != null || itemTooltipDetailText != null || itemTooltipText != null;
+        if (!hasBoundTooltipText)
+            return;
+
+        itemTooltipRoot.SetActive(true);
+
+        if (itemTooltipNameText != null)
+            itemTooltipNameText.text = title;
+
+        if (itemTooltipDetailText != null)
+            itemTooltipDetailText.text = detail;
+
+        if (itemTooltipText != null &&
+            itemTooltipText != itemTooltipNameText &&
+            itemTooltipText != itemTooltipDetailText)
+        {
+            itemTooltipText.text = $"{title}\n{detail}";
+        }
+        else if (itemTooltipNameText == null && itemTooltipDetailText == itemTooltipText && itemTooltipText != null)
+        {
+            itemTooltipText.text = $"{title}\n{detail}";
+        }
+
+        var tooltipRect = itemTooltipRoot.transform as RectTransform;
+        if (tooltipRect != null && itemView.transform is RectTransform sourceRect)
+        {
+            tooltipRect.SetAsLastSibling();
+            PositionTooltip(tooltipRect, sourceRect);
+        }
+    }
+
+    private void OnItemViewHoverExit(InventoryItemView itemView)
+    {
+        HideItemTooltip();
+    }
+
+    private void HideItemTooltip()
+    {
+        if (itemTooltipRoot != null)
+            itemTooltipRoot.SetActive(false);
+    }
+
+    private void ApplyTooltipLayout(RectTransform tooltipRect, string title, string detail)
+    {
+        if (tooltipRect == null)
+            return;
+
+        if (itemTooltipNameText != null && itemTooltipDetailText != null)
+        {
+            LayoutSplitTooltip(tooltipRect, title, detail);
+            return;
+        }
+
+        if (itemTooltipText != null)
+            LayoutSingleTooltip(tooltipRect, $"{title}\n{detail}");
+    }
+
+    private void LayoutSplitTooltip(RectTransform tooltipRect, string title, string detail)
+    {
+        RectTransform titleRect = itemTooltipNameText.transform as RectTransform;
+        RectTransform detailRect = itemTooltipDetailText.transform as RectTransform;
+        if (titleRect == null || detailRect == null)
+            return;
+
+        float contentMaxWidth = TooltipMaxWidth - TooltipPadding * 2f;
+        float contentMinWidth = TooltipMinWidth - TooltipPadding * 2f;
+        float titleWidth = itemTooltipNameText.GetPreferredValues(title, contentMaxWidth, 0f).x;
+        float detailWidth = itemTooltipDetailText.GetPreferredValues(detail, contentMaxWidth, 0f).x;
+        float contentWidth = Mathf.Clamp(Mathf.Max(titleWidth, detailWidth), contentMinWidth, contentMaxWidth);
+
+        float titleHeight = itemTooltipNameText.GetPreferredValues(title, contentWidth, 0f).y;
+        float detailHeight = itemTooltipDetailText.GetPreferredValues(detail, contentWidth, 0f).y;
+        float height = TooltipPadding + titleHeight + TooltipSpacing + detailHeight + TooltipPadding;
+
+        if (height > TooltipMaxHeight)
+        {
+            detailHeight = Mathf.Max(120f, TooltipMaxHeight - TooltipPadding * 2f - titleHeight - TooltipSpacing);
+            height = TooltipPadding + titleHeight + TooltipSpacing + detailHeight + TooltipPadding;
+        }
+
+        tooltipRect.pivot = new Vector2(0f, 1f);
+        tooltipRect.sizeDelta = new Vector2(contentWidth + TooltipPadding * 2f, height);
+
+        titleRect.anchorMin = new Vector2(0f, 1f);
+        titleRect.anchorMax = new Vector2(0f, 1f);
+        titleRect.pivot = new Vector2(0f, 1f);
+        titleRect.anchoredPosition = new Vector2(TooltipPadding, -TooltipPadding);
+        titleRect.sizeDelta = new Vector2(contentWidth, titleHeight);
+
+        detailRect.anchorMin = new Vector2(0f, 1f);
+        detailRect.anchorMax = new Vector2(0f, 1f);
+        detailRect.pivot = new Vector2(0f, 1f);
+        detailRect.anchoredPosition = new Vector2(TooltipPadding, -(TooltipPadding + titleHeight + TooltipSpacing));
+        detailRect.sizeDelta = new Vector2(contentWidth, detailHeight);
+    }
+
+    private void LayoutSingleTooltip(RectTransform tooltipRect, string content)
+    {
+        RectTransform textRect = itemTooltipText.transform as RectTransform;
+        if (textRect == null)
+            return;
+
+        float contentMaxWidth = TooltipMaxWidth - TooltipPadding * 2f;
+        float contentMinWidth = TooltipMinWidth - TooltipPadding * 2f;
+        float preferredWidth = itemTooltipText.GetPreferredValues(content, contentMaxWidth, 0f).x;
+        float contentWidth = Mathf.Clamp(preferredWidth, contentMinWidth, contentMaxWidth);
+        float contentHeight = itemTooltipText.GetPreferredValues(content, contentWidth, 0f).y;
+        float height = Mathf.Min(TooltipMaxHeight, contentHeight + TooltipPadding * 2f);
+
+        tooltipRect.pivot = new Vector2(0f, 1f);
+        tooltipRect.sizeDelta = new Vector2(contentWidth + TooltipPadding * 2f, height);
+
+        textRect.anchorMin = new Vector2(0f, 1f);
+        textRect.anchorMax = new Vector2(0f, 1f);
+        textRect.pivot = new Vector2(0f, 1f);
+        textRect.anchoredPosition = new Vector2(TooltipPadding, -TooltipPadding);
+        textRect.sizeDelta = new Vector2(contentWidth, height - TooltipPadding * 2f);
+    }
+
+    private void PositionTooltip(RectTransform tooltipRect, RectTransform sourceRect)
+    {
+        RectTransform parentRect = tooltipRect.parent as RectTransform;
+        if (parentRect == null)
+            return;
+
+        var corners = new Vector3[4];
+        sourceRect.GetWorldCorners(corners);
+        Vector2 topLeftScreen = RectTransformUtility.WorldToScreenPoint(null, corners[1]);
+        Vector2 topRightScreen = RectTransformUtility.WorldToScreenPoint(null, corners[2]);
+        Vector2 bottomLeftScreen = RectTransformUtility.WorldToScreenPoint(null, corners[0]);
+        Vector2 bottomRightScreen = RectTransformUtility.WorldToScreenPoint(null, corners[3]);
+        Vector2 rightCenterScreen = (topRightScreen + bottomRightScreen) * 0.5f;
+        Vector2 leftCenterScreen = (topLeftScreen + bottomLeftScreen) * 0.5f;
+
+        float width = tooltipRect.rect.width;
+        float height = tooltipRect.rect.height;
+        bool showOnRight = rightCenterScreen.x + TooltipScreenMargin + width <= Screen.width - TooltipScreenMargin;
+
+        tooltipRect.pivot = showOnRight ? new Vector2(0f, 0.5f) : new Vector2(1f, 0.5f);
+
+        Vector2 targetScreen = showOnRight
+            ? rightCenterScreen + new Vector2(TooltipScreenMargin, 0f)
+            : leftCenterScreen + new Vector2(-TooltipScreenMargin, 0f);
+
+        if (targetScreen.x < TooltipScreenMargin)
+            targetScreen.x = TooltipScreenMargin;
+
+        if (targetScreen.x > Screen.width - TooltipScreenMargin)
+            targetScreen.x = Screen.width - TooltipScreenMargin;
+
+        float halfHeight = height * 0.5f;
+        if (targetScreen.y - halfHeight < TooltipScreenMargin)
+            targetScreen.y = TooltipScreenMargin + halfHeight;
+
+        if (targetScreen.y + halfHeight > Screen.height - TooltipScreenMargin)
+            targetScreen.y = Screen.height - TooltipScreenMargin - halfHeight;
+
+        if (RectTransformUtility.ScreenPointToWorldPointInRectangle(parentRect, targetScreen, null, out var worldPoint))
+            tooltipRect.position = worldPoint;
+    }
+
+    private string BuildTooltipTitle(ItemInventoryEntry entry, ItemTemplateData template)
+    {
+        if (entry == null)
+            return string.Empty;
+
+        return entry.runtimeData?.name ?? template?.displayName ?? entry.templateId;
+    }
+
+    private string BuildCompactTooltipDetail(ItemInventoryEntry entry, ItemTemplateData template)
+    {
+        if (entry == null)
+            return string.Empty;
+
+        string rarity = string.IsNullOrWhiteSpace(entry.runtimeData?.rarity) ? "ÆÕÍ¨" : entry.runtimeData.rarity;
+        string description = string.IsNullOrWhiteSpace(entry.runtimeData?.description)
+            ? template?.templateDescription ?? "ÎŞÃèÊö"
+            : entry.runtimeData.description;
+
+        return $"Ï¡ÓĞ¶È: {rarity}\nËµÃ÷: {description}";
+    }
+
+    private static string TrimStatusText(string rawText, int maxLength)
+    {
+        if (string.IsNullOrWhiteSpace(rawText))
+            return "ÔİÎŞ";
+
+        string trimmed = rawText.Trim();
+        if (maxLength <= 3 || trimmed.Length <= maxLength)
+            return trimmed;
+
+        return trimmed.Substring(0, maxLength - 3) + "...";
+    }
+
+    private string BuildTooltipDetail(ItemInventoryEntry entry, ItemTemplateData template, bool isEquipped, EquipSlotType slotType)
+    {
+        if (entry == null)
+            return string.Empty;
+
+        string rarity = string.IsNullOrWhiteSpace(entry.runtimeData?.rarity) ? "ÆÕÍ¨" : entry.runtimeData.rarity;
+        string description = string.IsNullOrWhiteSpace(entry.runtimeData?.description)
+            ? template?.templateDescription ?? "ÎŞÃèÊö"
+            : entry.runtimeData.description;
+
+        return $"Ï¡ÓĞ¶È: {rarity}\nËµÃ÷: {description}";
+    }
+
+    private string BuildTooltipText(ItemInventoryEntry entry, ItemTemplateData template, bool isEquipped, EquipSlotType slotType)
+    {
+        if (entry == null)
+            return string.Empty;
+
+        string slotText = template != null && template.IsEquipment
+            ? template.equipSlot.ToString()
+            : (isEquipped ? slotType.ToString() : "±³°üÎïÆ·");
+        string countText = entry.count > 1 ? $"ÊıÁ¿: {entry.count}\n" : string.Empty;
+        string rarity = string.IsNullOrWhiteSpace(entry.runtimeData?.rarity) ? "ÆÕÍ¨" : entry.runtimeData.rarity;
+        string description = string.IsNullOrWhiteSpace(entry.runtimeData?.description)
+            ? template?.templateDescription ?? "ÎŞÃèÊö"
+            : entry.runtimeData.description;
+        string effect = string.IsNullOrWhiteSpace(entry.runtimeData?.effectText) ? "ÎŞ" : entry.runtimeData.effectText;
+        string modifiers = entry.runtimeData?.statModifiers != null && entry.runtimeData.statModifiers.Count > 0
+            ? InventoryStateUtility.BuildModifierText(entry.runtimeData.statModifiers)
+            : "none";
+
+        return
+            $"{entry.runtimeData?.name ?? template?.displayName ?? entry.templateId}\n" +
+            $"Ä£°å: {entry.templateId}\n" +
+            $"·ÖÀà: {template?.itemKind.ToString() ?? "Unknown"}\n" +
+            $"²ÛÎ»: {slotText}\n" +
+            $"Ï¡ÓĞ¶È: {rarity}\n" +
+            countText +
+            $"ËµÃ÷: {description}\n" +
+            $"Ğ§¹û: {effect}\n" +
+            $"´ÊÌõ: {modifiers}";
+    }
+
+    private static TMP_Text FindTooltipText(IEnumerable<TMP_Text> texts, params string[] keywords)
+    {
+        if (texts == null || keywords == null || keywords.Length == 0)
+            return null;
+
+        foreach (var text in texts)
+        {
+            if (text == null || string.IsNullOrWhiteSpace(text.name))
+                continue;
+
+            foreach (string keyword in keywords)
+            {
+                if (!string.IsNullOrWhiteSpace(keyword) &&
+                    text.name.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    return text;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private void ClearSpawnedItemViews()
+    {
+        foreach (var view in activeItemViews)
+        {
+            if (view != null)
+                Destroy(view.gameObject);
+        }
+
+        activeItemViews.Clear();
+    }
+
+    private RectTransform ResolveParentRoot(bool isEquipped)
+    {
+        if (isEquipped)
+            return equipmentStartPosition != null ? equipmentStartPosition.parent as RectTransform : characterPanelRoot != null ? characterPanelRoot.transform as RectTransform : null;
+
+        return bagStartPosition != null ? bagStartPosition.parent as RectTransform : bagPanelRoot != null ? bagPanelRoot.transform as RectTransform : null;
+    }
+
+    private Vector2 GetBagPosition(int row, int column)
+    {
+        if (bagStartPosition == null)
+            return Vector2.zero;
+
+        return bagStartPosition.anchoredPosition + new Vector2(column * bagStepX, -row * bagStepY);
+    }
+
+    private Vector2 GetEquipmentPosition(int index)
+    {
+        if (equipmentStartPosition == null)
+            return Vector2.zero;
+
+        return equipmentStartPosition.anchoredPosition + new Vector2(index * equipmentStepX, 0f);
     }
 
     private static void SetButtonLabel(Button button, string text)
@@ -301,11 +1291,11 @@ public class MainGamePanel : BasePanel
     {
         return rawTime switch
         {
-            "Dawn" => "æ¸…æ™¨",
-            "Day" => "ç™½æ˜¼",
-            "Dusk" => "å‚æ™š",
-            "Night" => "å¤œæ™š",
-            _ => string.IsNullOrWhiteSpace(rawTime) ? "æœªçŸ¥" : rawTime
+            "Dawn" => "Çå³¿",
+            "Day" => "°×Öç",
+            "Dusk" => "°øÍí",
+            "Night" => "Ò¹Íí",
+            _ => string.IsNullOrWhiteSpace(rawTime) ? "Î´Öª" : rawTime
         };
     }
 
@@ -313,23 +1303,48 @@ public class MainGamePanel : BasePanel
     {
         return rawWeather switch
         {
-            "Clear" => "æ™´æœ—",
-            "Foggy" => "è¿·é›¾",
-            "Rainy" => "é›¨å¹•",
-            "Stormy" => "ç‹‚é£",
-            _ => string.IsNullOrWhiteSpace(rawWeather) ? "æœªçŸ¥" : rawWeather
+            "Clear" => "ÇçÀÊ",
+            "Foggy" => "ÃÔÎí",
+            "Rainy" => "ÓêÄ»",
+            "Stormy" => "¿ñ·ç",
+            _ => string.IsNullOrWhiteSpace(rawWeather) ? "Î´Öª" : rawWeather
         };
     }
 
-    private IEnumerator ScrollToBottomCoroutine()
+    private GameObject FindChildGameObject(string childName)
     {
-        // ç­‰å¾…å½“å‰å¸§çš„ UI å¸ƒå±€é‡å»ºå®Œæˆ
-        yield return new WaitForEndOfFrame();
+        var child = FindChildTransform(childName);
+        return child != null ? child.gameObject : null;
+    }
 
-        if (scrollRect != null)
+    private RectTransform FindChildRectTransform(string childName)
+    {
+        return FindChildTransform(childName) as RectTransform;
+    }
+
+    private Transform FindChildTransform(string childName)
+    {
+        if (string.IsNullOrWhiteSpace(childName))
+            return null;
+
+        var transforms = GetComponentsInChildren<Transform>(true);
+        foreach (var candidate in transforms)
         {
-            // 0 ä»£è¡¨åº•éƒ¨ï¼Œ1 ä»£è¡¨é¡¶éƒ¨
-            scrollRect.verticalNormalizedPosition = 0f;
+            if (candidate != null && string.Equals(candidate.name, childName, StringComparison.Ordinal))
+                return candidate;
         }
+
+        return null;
+    }
+
+    private void OnDestroy()
+    {
+        UnregisterCenterToastListener();
+    }
+
+    private void OnEnable()
+    {
+        if (centerToastCoroutine == null && centerToastQueue.Count > 0 && gameObject.activeInHierarchy)
+            centerToastCoroutine = StartCoroutine(PlayCenterToastQueue());
     }
 }

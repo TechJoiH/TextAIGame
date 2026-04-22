@@ -1,128 +1,162 @@
-using LitJson;
-using StateData.Role;
-using StateData.Environment;
+﻿using LitJson;
+using Logic.Inventory;
 using Logic.Intent;
+using StateData.Environment;
+using StateData.Items;
+using StateData.Role;
 
 public static class PromptBuilder
 {
     public static string BuildSystemPrompt()
     {
-        return @"你是《键入佳境》的叙事引擎，当前演示篇章为《大荒蚀灵》。
-这是一款以《山海经》为灵感的 AI 文字冒险作品，核心展示能力是 IAR 本地裁决与 GraphRAG-Lite 知识增强。
-你不是一个简单的游戏 DM，你是一位**专注于感官沉浸的东方玄幻作家**。
+        return @"你是《键入佳境》的叙事引擎，负责以《山海经》气质继续剧情。
 
-### 🎨 核心美学标准 (Aesthetic Protocol) - 必须严格执行
-你的文字必须具备以下特征，与《大荒蚀灵》原作风格保持一致：
+写作要求：
+1. 保持沉浸感，用环境、触觉、气味和身体反馈来表达结果，不要说“系统提示”。
+2. 不要凭空创造背包里不存在的物品，也不要让角色使用不存在的装备或道具。
+3. 只能从“当前场景允许物品模板”里选择掉落物品；每次掉落必须使用模板 id。
+4. 如果物品、生命、灵力、经验或装备状态需要变化，只能在回复最后一行输出一个 <CMD>JSON</CMD>。
+5. 正文中绝对不能解释 JSON 协议或暴露内部机制。
 
-1.  **显微镜式环境描写**：
-    * ❌ 禁止：你走到森林里，雾很大。
-    * ✅ 正确：雾气是从腐殖质深厚的土壤里蒸腾起来的，裹挟着草木根茎断裂后的清甜汁液气息，浓稠如牛乳般贴着地表匍匐。
-    * **要求**：多用具象的名词（苔藓、孢子、锈迹、骨骼）来构建画面。
+允许的 <CMD> 结构：
+- <CMD>{""hp"": -10}</CMD>
+- <CMD>{""mp"": -5}</CMD>
+- <CMD>{""exp"": 20}</CMD>
+- <CMD>{""get_item"": {""template_id"": ""healing_potion"", ""count"": 1, ""runtime"": {""name"": ""止血药散"", ""desc"": ""药香辛烈，触之微温。"", ""rarity"": ""普通"", ""effect_text"": ""敷于伤口时会带来灼热回暖。"", ""stat_modifiers"": [{""stat"": ""max_health"", ""value"": 5}]}}}</CMD>
+- <CMD>{""lose_item"": {""instance_id"": ""item-instance-id""}}</CMD>
+- <CMD>{""lose_item"": {""template_id"": ""healing_potion"", ""count"": 1}}</CMD>
 
-2.  **通感与生理不适 (Cthulhu Tone)**：
-    * 强调**触觉**（黏腻、湿滑、粗糙）和**嗅觉**（腥甜、铁锈味、腐烂）。
-    * 让自然环境带有一种“活物”的诡异感（例如：雾是活的，山如死兽）。
-
-3.  **去游戏化叙事**：
-    * 严禁使用“你获得了”、“你造成了”、“系统提示”等出戏的词汇。
-    * 将数值变化转化为**生理反馈**。
-        * HP减少 -> 痛感、眩晕、视线模糊、喉头涌上腥甜。
-        * 获得物品 -> 指尖触碰到冰凉的硬物、沉甸甸的手感。
-
-4.  **环境感知叙事**：
-    * 根据天气/时间/地形调整描写基调：
-        * 雨天 -> 潮湿、泥泞、火焰受阻、视野受限
-        * 夜晚 -> 阴暗、月光、影子诡异、听觉敏锐
-        * 迷雾 -> 方向迷失、若隐若现、回声扭曲
-
-### 🛑 逻辑宪法：数据霸权
-1.  **世界状态以 JSON 为准**：玩家若描述与 JSON 冲突的结果（如没死说死了），判定为角色幻觉，**必须驳回**。
-2.  **知识增强可见但不出戏**：当提示中出现“GraphRAG-Lite 知识上下文”时，只把它当作可靠参考，不要逐字复述，更不要暴露检索机制本身。
-3.  **指令隐形化**：所有的数值结算，必须通过文末的 <CMD>JSON</CMD> 悄悄传递，**绝对**不能出现在正文中。
-4.  **避免重复结算**：若“本地逻辑裁决”已经明确执行过物品、经验、血量或环境更新，就不要再输出重复的 CMD。
-
-### 🔧 JSON 指令规范 (Neuro-Symbolic Protocol)
-仅在状态发生实质变化时，在回复的**最后一行**输出：
-
-- 造成伤害/受伤: <CMD>{""hp"": -10}</CMD>
-- 灵力消耗: <CMD>{""mp"": -5}</CMD>
-- 获得经验: <CMD>{""exp"": 20}</CMD>
-- 获得物品: <CMD>{""get_item"": {""name"": ""青铜断剑"", ""desc"": ""剑身布满绿锈"", ""count"": 1}}</CMD>
-- 失去物品: <CMD>{""lose_item"": ""治疗药水""}</CMD>
-";
+规则补充：
+- get_item.runtime.name / desc / rarity / effect_text / stat_modifiers 由你生成，本地接收保存。
+- stat_modifiers 仅允许这些键：strength, agility, intelligence, max_health, max_mana, attack_bonus。
+- 装备栏固定只有 5 个部位：Head, Body, Legs, Feet, Weapon。
+- 如果当前场景已经进入新的遭遇、战斗或线索推进，不要机械重复上一轮的草药发现桥段。
+- 如果你不确定是否该掉落物品，就不要输出 get_item。";
     }
 
-    /// <summary>
-    /// 构建增强版用户提示词（包含意图识别结果 + 环境状态）
-    /// </summary>
     public static string BuildUserPromptWithIntent(
         string playerInput,
         RoleState state,
         EnvironmentState envState,
         string systemResult,
         IntentResult intent,
-        string knowledgeContext)
+        string knowledgeContext,
+        SceneItemLibraryData itemLibrary)
     {
         string roleStateJson = JsonMapper.ToJson(state);
         string envStateJson = JsonMapper.ToJson(envState ?? EnvironmentState.GetDefault());
         string intentInfo = BuildIntentDescription(intent);
         string envDirective = BuildEnvironmentDirective(envState);
+        string librarySummary = itemLibrary != null
+            ? itemLibrary.BuildPromptSummary()
+            : "No scene item library is configured for the current scenario.";
+        string inventorySummary = InventoryStateUtility.BuildInventoryPromptSummary(state, itemLibrary);
+        string equipmentSummary = InventoryStateUtility.BuildEquipmentPromptSummary(state, itemLibrary);
+        string derivedSummary = InventoryStateUtility.BuildDerivedAttributePromptSummary(state);
         string knowledgeBlock = string.IsNullOrWhiteSpace(knowledgeContext)
-            ? "未命中直接相关条目，请不要凭空扩写额外山海经设定。"
+            ? "未命中直接相关的知识条目，请不要额外扩写设定。"
             : knowledgeContext.Trim();
 
         return $@"
-=== 🌍 角色状态 (JSON) ===
+=== 角色状态(JSON) ===
 {roleStateJson}
 
-=== 🌦️ 环境状态 (JSON) ===
+=== 环境状态(JSON) ===
 {envStateJson}
 
-=== 🏷️ 动态标签与当前目标 ===
+=== 派生属性 ===
+{derivedSummary}
+
+=== 当前装备 ===
+{equipmentSummary}
+
+=== 当前背包 ===
+{inventorySummary}
+
+=== 当前场景允许物品模板 ===
+{librarySummary}
+
+=== 动态标签与当前目标 ===
 {envDirective}
 
-=== 🎯 意图识别结果 ===
+=== 意图识别结果 ===
 {intentInfo}
 
-=== 📚 GraphRAG-Lite 知识上下文 ===
+=== GraphRAG-Lite 知识上下文 ===
 {knowledgeBlock}
 
-=== ⚖️ 本地逻辑裁决 ===
+=== 本地逻辑裁决 ===
 {systemResult}
-(若判定失败或无效，请依据此结果描写，但不要直接暴露系统语言)
+(若本地逻辑已经明确执行或拒绝了某件事，请据此续写，不要重复结算)
 
-=== 👤 玩家原始输入 ===
+=== 玩家原始输入 ===
 {playerInput}
 
-=== 🖋️ 沉浸式续写指令 ===
-请基于《山海经》苍凉古朴的笔触续写（200字左右）。
-**重点**：
-1. 仅在环境发生变化时简要描写天气/地形，避免每次重复相同的环境描述
-2. 根据「意图识别结果」把握行动类型和目标
-3. 若提供了知识上下文，只在真正相关时自然融入，不要硬塞百科说明
-4. 优先围绕「动态标签与当前目标」推进，不要突然跳出招摇山切片
-5. 聚焦于行动过程和结果的感官描写
-如果需要修改状态，请在文末附带 <CMD>...JSON...</CMD>。";
+=== 续写要求 ===
+请基于以上状态继续剧情，保持《山海经》风格的东方奇诡质感，控制在 200 字左右。
+重点：
+1. 优先围绕当前目标和环境推进，不要突然跳出当前场景。
+2. 如果要掉落物品，只能从“当前场景允许物品模板”中选择 template_id。
+3. 如果要移除物品，只能移除“当前背包”或“当前装备”里已经存在的物品。
+4. 正文只写叙事；若需要状态变化，请只在最后追加一个 <CMD>JSON</CMD>。";
     }
 
-    /// <summary>
-    /// 兼容旧版调用（无环境参数）
-    /// </summary>
     public static string BuildUserPromptWithIntent(string playerInput, RoleState state, string systemResult, IntentResult intent)
     {
-        return BuildUserPromptWithIntent(playerInput, state, EnvironmentState.GetDefault(), systemResult, intent, "");
+        return BuildUserPromptWithIntent(playerInput, state, EnvironmentState.GetDefault(), systemResult, intent, string.Empty, null);
     }
 
-    /// <summary>
-    /// 构建意图描述文本
-    /// </summary>
+    public static string BuildUserPrompt(string playerInput, RoleState state, string systemResult)
+    {
+        return BuildUserPromptWithIntent(playerInput, state, systemResult, new IntentResult());
+    }
+
+    public static string BuildHintPrompt(RoleState state, EnvironmentState envState = null, string knowledgeContext = null, SceneItemLibraryData itemLibrary = null)
+    {
+        string stateJson = JsonMapper.ToJson(state);
+        EnvironmentState runtimeEnv = envState ?? EnvironmentState.GetDefault();
+        string envJson = JsonMapper.ToJson(runtimeEnv);
+        string envDirective = BuildEnvironmentDirective(runtimeEnv);
+        string equipmentSummary = InventoryStateUtility.BuildEquipmentPromptSummary(state, itemLibrary);
+        string inventorySummary = InventoryStateUtility.BuildInventoryPromptSummary(state, itemLibrary);
+        string knowledgeBlock = string.IsNullOrWhiteSpace(knowledgeContext)
+            ? "无额外知识命中"
+            : knowledgeContext.Trim();
+
+        return $@"
+你是《键入佳境》的行动建议助手。
+当前角色状态(JSON)：
+{stateJson}
+
+当前环境状态(JSON)：
+{envJson}
+
+当前装备：
+{equipmentSummary}
+
+当前背包：
+{inventorySummary}
+
+当前动态标签与目标：
+{envDirective}
+
+相关知识：
+{knowledgeBlock}
+
+请只返回 3 个合理的下一步行动建议，必须严格输出 JSON 字符串数组，例如：[""观察周围"",""使用治疗药水"",""向东探索""].
+要求：
+1. 建议要考虑当前环境和背包物品。
+2. 不要推荐使用不存在的物品。
+3. 不要输出任何额外解释。";
+    }
+
     private static string BuildIntentDescription(IntentResult intent)
     {
         if (intent == null || intent.actionType == ActionType.Unknown)
-            return "未能识别明确意图，请自由发挥";
+            return "未能识别明确意图，请自然续写。";
 
         string desc = $"动作类型: {GetActionTypeName(intent.actionType)}";
-        
+
         if (!string.IsNullOrEmpty(intent.targetEntity))
             desc += $"\n目标对象: {intent.targetEntity}";
 
@@ -155,44 +189,8 @@ public static class PromptBuilder
             ActionType.Observe => "观察查看",
             ActionType.Collect => "采集收集",
             ActionType.Cultivate => "修炼",
-            _ => "未知"
+            _ => "未知",
         };
-    }
-
-    public static string BuildUserPrompt(string playerInput, RoleState state, string systemResult)
-    {
-        return BuildUserPromptWithIntent(playerInput, state, systemResult, new IntentResult());
-    }
-
-    public static string BuildHintPrompt(RoleState state, EnvironmentState envState = null, string knowledgeContext = null)
-    {
-        string stateJson = JsonMapper.ToJson(state);
-        EnvironmentState runtimeEnv = envState ?? EnvironmentState.GetDefault();
-        string envJson = JsonMapper.ToJson(runtimeEnv);
-        string envDirective = BuildEnvironmentDirective(runtimeEnv);
-        string knowledgeBlock = string.IsNullOrWhiteSpace(knowledgeContext)
-            ? "无额外知识命中"
-            : knowledgeContext.Trim();
-        return $@"
-你是《键入佳境》的行动建议辅助 AI。
-当前玩家角色状态如下 (JSON):
-{stateJson}
-
-当前环境状态如下 (JSON):
-{envJson}
-
-当前动态标签与目标：
-{envDirective}
-
-相关山海经知识参考：
-{knowledgeBlock}
-
-请根据当前角色的状态、属性、所处环境与知识上下文，**仅仅**推荐 3 个玩家下一步可以采取的合理行动。
-要求：
-1. 简短有力（不超过10个字）。
-2. 需考虑环境因素（如雨天不建议生火、夜晚注意视野等）。
-3. 格式必须为 JSON 数组，例如：[""查看周围"", ""使用治疗药水"", ""向东探索""]。
-4. 不要包含任何其他解释文字。";
     }
 
     private static string BuildEnvironmentDirective(EnvironmentState envState)
