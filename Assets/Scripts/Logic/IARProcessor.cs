@@ -9,7 +9,6 @@ using StateData.Environment;
 using StateData.Items;
 using StateData.Role;
 using UnityEngine;
-using Object = UnityEngine.Object;
 
 public class IARProcessor : MonoSingleton<IARProcessor>
 {
@@ -847,8 +846,7 @@ public class IARProcessor : MonoSingleton<IARProcessor>
 			string text = (string)jsonData2["template_id"];
 			if (!TryResolveAllowedTemplateId(itemLibrary, text, out var resolvedTemplateId))
 			{
-				Debug.LogWarning($"[IAR] Rejected item outside scene library: {text}");
-				failReason = "已拒绝加入场景物品库之外的物品。";
+				failReason = "已拒绝场景物品库之外的物品: " + text;
 				InventoryStateUtility.NormalizeResourceCaps(state, InventoryStateUtility.CalculateDerivedAttributes(state));
 				return false;
 			}
@@ -1069,12 +1067,7 @@ public class IARProcessor : MonoSingleton<IARProcessor>
 		string description2 = ((itemTemplateData != null && !string.IsNullOrWhiteSpace(itemTemplateData.templateDescription)) ? itemTemplateData.templateDescription : description);
 		ItemInventoryEntry entry = InventoryStateUtility.CreateEntryFromTemplate(templateId, runtimeName, description2, "普通", effectText, null);
 		string failReason;
-		bool added = InventoryStateUtility.TryAddInventoryEntry(state, entry, sceneItemLibraryData, out failReason);
-		if (added)
-		{
-			NotifyItemAcquired(itemTemplateData, entry.runtimeData, entry.count);
-		}
-		return added;
+		return InventoryStateUtility.TryAddInventoryEntry(state, entry, sceneItemLibraryData, out failReason);
 	}
 
 	private bool ConsumeInventoryItem(RoleState state, string itemName)
@@ -1386,3 +1379,5 @@ public class IARProcessor : MonoSingleton<IARProcessor>
 		return env != null && ((!string.IsNullOrWhiteSpace(env.locationId) && env.locationId.Contains("zhaoyao", StringComparison.OrdinalIgnoreCase)) || (!string.IsNullOrWhiteSpace(env.locationName) && env.locationName.Contains("招摇山", StringComparison.Ordinal)));
 	}
 }
+You are not using the latest version of the tool, please update.
+Latest version is '10.0.0.8330' (yours is '8.2.0.7535-95108c96')

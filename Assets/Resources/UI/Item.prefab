@@ -13,6 +13,7 @@ GameObject:
   - component: {fileID: 179395453374526377}
   - component: {fileID: 735184809801372432}
   - component: {fileID: 4269153770145623401}
+  - component: {fileID: 1011608438015633626}
   m_Layer: 5
   m_Name: Item
   m_TagString: Untagged
@@ -136,3 +137,16 @@ MonoBehaviour:
   iconImage: {fileID: 179395453374526377}
   quantityText: {fileID: 0}
   button: {fileID: 735184809801372432}
+--- !u!114 &1011608438015633626
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4376740214868104396}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6c279e535bea37646b96e0928bd86b4a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  largeScale: {x: 1.2, y: 1.2, z: 1.2}

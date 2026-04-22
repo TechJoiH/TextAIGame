@@ -13,6 +13,7 @@ GameObject:
   - component: {fileID: 5151283906252503639}
   - component: {fileID: 3907778572806633443}
   - component: {fileID: 8258717131918870591}
+  - component: {fileID: 5749680657772427064}
   m_Layer: 5
   m_Name: ButtonBegin
   m_TagString: Untagged
@@ -143,6 +144,19 @@ Animator:
   m_AllowConstantClipSamplingOptimization: 1
   m_KeepAnimatorStateOnDisable: 0
   m_WriteDefaultValuesOnDisable: 0
+--- !u!114 &5749680657772427064
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1192610125400417653}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6c279e535bea37646b96e0928bd86b4a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  largeScale: {x: 1.2, y: 1.2, z: 1.2}
 --- !u!1 &1903143280488704643
 GameObject:
   m_ObjectHideFlags: 0
@@ -397,6 +411,7 @@ GameObject:
   - component: {fileID: 8155925852284592666}
   - component: {fileID: 7451195070190832265}
   - component: {fileID: 2460330340051580612}
+  - component: {fileID: 9033409466503939707}
   m_Layer: 5
   m_Name: ButtonExit
   m_TagString: Untagged
@@ -506,6 +521,19 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls: []
+--- !u!114 &9033409466503939707
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3717745406641823537}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6c279e535bea37646b96e0928bd86b4a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  largeScale: {x: 1.2, y: 1.2, z: 1.2}
 --- !u!1 &8426025302847014088
 GameObject:
   m_ObjectHideFlags: 0
@@ -727,6 +755,7 @@ GameObject:
   - component: {fileID: 6662672652963192376}
   - component: {fileID: 4075435785683813881}
   - component: {fileID: 5624148287707926454}
+  - component: {fileID: 3641571187206702814}
   m_Layer: 5
   m_Name: ButtonSetting
   m_TagString: Untagged
@@ -836,6 +865,19 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls: []
+--- !u!114 &3641571187206702814
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8645482017492227288}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6c279e535bea37646b96e0928bd86b4a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  largeScale: {x: 1.2, y: 1.2, z: 1.2}
 --- !u!1 &8907813499100783377
 GameObject:
   m_ObjectHideFlags: 0
