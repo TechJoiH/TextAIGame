@@ -9,6 +9,7 @@ using StateData.Environment;
 using StateData.Items;
 using StateData.Role;
 using UnityEngine;
+using UObject = UnityEngine.Object;
 
 public class IARProcessor : MonoSingleton<IARProcessor>
 {
@@ -114,7 +115,7 @@ public class IARProcessor : MonoSingleton<IARProcessor>
 			envState = EnvironmentState.GetDefault();
 		}
 		envState.EnsureCollections();
-		InventoryStateUtility.EnsureCompatibility(currentState, ((Object)GameLoop.Instance != (Object)null) ? GameLoop.Instance.CurrentItemLibrary : null);
+		InventoryStateUtility.EnsureCompatibility(currentState, (UObject)GameLoop.Instance != null ? GameLoop.Instance.CurrentItemLibrary : null);
 		if (currentState.attributes.currentHealth <= 0)
 		{
 			failReason = "你的身体已经无法支撑任何行动，意识正缓缓坠入黑暗。";
@@ -208,7 +209,7 @@ public class IARProcessor : MonoSingleton<IARProcessor>
 		//IL_000e: Unknown result type (might be due to invalid IL or missing references)
 		//IL_0019: Expected O, but got Unknown
 		failReason = string.Empty;
-		InventoryStateUtility.EnsureCompatibility(state, ((Object)GameLoop.Instance != (Object)null) ? GameLoop.Instance.CurrentItemLibrary : null);
+		InventoryStateUtility.EnsureCompatibility(state, (UObject)GameLoop.Instance != null ? GameLoop.Instance.CurrentItemLibrary : null);
 		switch (intent.actionType)
 		{
 		case ActionType.UseItem:
@@ -251,7 +252,7 @@ public class IARProcessor : MonoSingleton<IARProcessor>
 			envState = EnvironmentState.GetDefault();
 		}
 		envState.EnsureCollections();
-		InventoryStateUtility.EnsureCompatibility(currentState, ((Object)GameLoop.Instance != (Object)null) ? GameLoop.Instance.CurrentItemLibrary : null);
+		InventoryStateUtility.EnsureCompatibility(currentState, (UObject)GameLoop.Instance != null ? GameLoop.Instance.CurrentItemLibrary : null);
 		if (ActionCosts.TryGetValue(intent.actionType, out var value) && value.manaCost > 0)
 		{
 			currentState.attributes.currentMana -= value.manaCost;
@@ -459,12 +460,12 @@ public class IARProcessor : MonoSingleton<IARProcessor>
 		}
 		if (env == null)
 		{
-			env = (((Object)GameLoop.Instance != (Object)null) ? GameLoop.Instance.CurrentEnvironment : EnvironmentState.GetDefault());
+			env = (((UObject)GameLoop.Instance != (UObject)null) ? GameLoop.Instance.CurrentEnvironment : EnvironmentState.GetDefault());
 		}
 		env.EnsureCollections();
-		if ((Object)(object)itemLibrary == (Object)null)
+		if ((UObject)(object)itemLibrary == (UObject)null)
 		{
-			itemLibrary = (((Object)GameLoop.Instance != (Object)null) ? GameLoop.Instance.CurrentItemLibrary : null);
+			itemLibrary = (((UObject)GameLoop.Instance != (UObject)null) ? GameLoop.Instance.CurrentItemLibrary : null);
 		}
 		InventoryStateUtility.EnsureCompatibility(state, itemLibrary);
 		ItemTemplateData itemTemplateData = InventoryStateUtility.ResolveTemplate(itemLibrary, entry);
@@ -537,7 +538,7 @@ public class IARProcessor : MonoSingleton<IARProcessor>
 		{
 			return false;
 		}
-		SceneItemLibraryData itemLibrary = (((Object)GameLoop.Instance != (Object)null) ? GameLoop.Instance.CurrentItemLibrary : null);
+		SceneItemLibraryData itemLibrary = (((UObject)GameLoop.Instance != (UObject)null) ? GameLoop.Instance.CurrentItemLibrary : null);
 		int inventoryIndex;
 		ItemInventoryEntry itemInventoryEntry = InventoryStateUtility.FindInventoryEntryByName(state, targetName, out inventoryIndex);
 		if (itemInventoryEntry == null)
@@ -846,7 +847,7 @@ public class IARProcessor : MonoSingleton<IARProcessor>
 			string text = (string)jsonData2["template_id"];
 			if (!TryResolveAllowedTemplateId(itemLibrary, text, out var resolvedTemplateId))
 			{
-				failReason = "已拒绝场景物品库之外的物品: " + text;
+				failReason = "已拒绝加入场景物品库之外的物品。";
 				InventoryStateUtility.NormalizeResourceCaps(state, InventoryStateUtility.CalculateDerivedAttributes(state));
 				return false;
 			}
@@ -1061,8 +1062,8 @@ public class IARProcessor : MonoSingleton<IARProcessor>
 		//IL_0011: Expected O, but got Unknown
 		//IL_0022: Unknown result type (might be due to invalid IL or missing references)
 		//IL_002d: Expected O, but got Unknown
-		SceneItemLibraryData sceneItemLibraryData = (((Object)GameLoop.Instance != (Object)null) ? GameLoop.Instance.CurrentItemLibrary : null);
-		ItemTemplateData itemTemplateData = (((Object)sceneItemLibraryData != (Object)null) ? sceneItemLibraryData.GetTemplate(templateId) : null);
+		SceneItemLibraryData sceneItemLibraryData = (((UObject)GameLoop.Instance != (UObject)null) ? GameLoop.Instance.CurrentItemLibrary : null);
+		ItemTemplateData itemTemplateData = (((UObject)sceneItemLibraryData != (UObject)null) ? sceneItemLibraryData.GetTemplate(templateId) : null);
 		string runtimeName = ((itemTemplateData != null && !string.IsNullOrWhiteSpace(itemTemplateData.displayName)) ? itemTemplateData.displayName : fallbackName);
 		string description2 = ((itemTemplateData != null && !string.IsNullOrWhiteSpace(itemTemplateData.templateDescription)) ? itemTemplateData.templateDescription : description);
 		ItemInventoryEntry entry = InventoryStateUtility.CreateEntryFromTemplate(templateId, runtimeName, description2, "普通", effectText, null);
@@ -1247,7 +1248,7 @@ public class IARProcessor : MonoSingleton<IARProcessor>
 		//IL_0005: Unknown result type (might be due to invalid IL or missing references)
 		//IL_0010: Expected O, but got Unknown
 		resolvedTemplateId = null;
-		if ((Object)itemLibrary == (Object)null || string.IsNullOrWhiteSpace(requestedTemplateId))
+		if (itemLibrary == null || string.IsNullOrWhiteSpace(requestedTemplateId))
 		{
 			return false;
 		}
@@ -1379,5 +1380,3 @@ public class IARProcessor : MonoSingleton<IARProcessor>
 		return env != null && ((!string.IsNullOrWhiteSpace(env.locationId) && env.locationId.Contains("zhaoyao", StringComparison.OrdinalIgnoreCase)) || (!string.IsNullOrWhiteSpace(env.locationName) && env.locationName.Contains("招摇山", StringComparison.Ordinal)));
 	}
 }
-You are not using the latest version of the tool, please update.
-Latest version is '10.0.0.8330' (yours is '8.2.0.7535-95108c96')

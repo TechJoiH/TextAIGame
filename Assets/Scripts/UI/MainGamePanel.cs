@@ -70,6 +70,10 @@ public class MainGamePanel : BasePanel
     private TMP_Text centerToastText;
     private CanvasGroup centerToastCanvasGroup;
     private Coroutine centerToastCoroutine;
+    private ScreenFlashFeedback screenFlashFeedback;
+    private RoleState healthFlashState;
+    private int lastHealthForFlash;
+    private bool hasHealthFlashBaseline;
 
     private const float TooltipMinWidth = 260f;
     private const float TooltipMaxWidth = 420f;
@@ -108,6 +112,7 @@ public class MainGamePanel : BasePanel
         ApplyInitialPanelVisibility();
         HideItemTooltip();
         EnsureCenterToastPresentation();
+        EnsureScreenFlashFeedback();
         RegisterCenterToastListener();
     }
 
@@ -116,6 +121,7 @@ public class MainGamePanel : BasePanel
         boundState = state;
         boundEnvironment = environmentState;
         boundItemLibrary = itemLibrary;
+        ResetHealthFlashBaseline(state);
         RefreshInventoryViews();
     }
 
@@ -139,10 +145,10 @@ public class MainGamePanel : BasePanel
             return text;
 
         return text
-            .Replace("ã€ç³»ç»Ÿã€?", "¡¾ÏµÍ³¡¿")
-            .Replace("ã€ç³»ç»Ÿã€", "¡¾ÏµÍ³¡¿")
-            .Replace("å·²è£…å¤‡ã€?", "ÒÑ×°±¸¡£")
-            .Replace("å·²å¸ä¸‹ã€?", "ÒÑĞ¶ÏÂ¡£");
+            .Replace("éŠ†æ„®éƒ´ç¼ç†´â‚¬?", "ã€ç³»ç»Ÿã€‘")
+            .Replace("éŠ†æ„®éƒ´ç¼ç†´â‚¬", "ã€ç³»ç»Ÿã€‘")
+            .Replace("å®¸èŒ¶î—Šæ¾¶å›¥â‚¬?", "å·²è£…å¤‡ã€‚")
+            .Replace("å®¸æ’åµæ¶“å¬¨â‚¬?", "å·²å¸ä¸‹ã€‚");
     }
 
     public void AppendStreamToken(string token)
@@ -188,74 +194,75 @@ public class MainGamePanel : BasePanel
         environmentState ??= EnvironmentState.GetDefault();
         environmentState.EnsureCollections();
         InventoryStateUtility.EnsureCompatibility(state, itemLibrary);
+        HandleHealthFlash(state);
         var derived = InventoryStateUtility.CalculateDerivedAttributes(state);
         var equippedWeapon = state.equipment.equipmentSlots.GetSlot(EquipSlotType.Weapon);
 
         if (Application.isPlaying)
         {
-            string compactRoleName = TrimStatusText(state.identity?.name ?? "ÎŞÃûÂÃÈË", 10);
-            string compactWeaponName = TrimStatusText(equippedWeapon?.runtimeData?.name ?? "¿ÕÊÖ", 10);
+            string compactRoleName = TrimStatusText(state.identity?.name ?? "æ— åæ—…äºº", 10);
+            string compactWeaponName = TrimStatusText(equippedWeapon?.runtimeData?.name ?? "ç©ºæ‰‹", 10);
             string compactLocation = TrimStatusText(environmentState.locationName, 12);
             string compactTagPreview = environmentState.dynamicTags != null && environmentState.dynamicTags.Count > 0
                 ? TrimStatusText(string.Join(" / ", environmentState.dynamicTags.Take(3)), 30)
-                : "ÔİÎŞ";
+                : "æš‚æ— ";
             string compactObjectiveText = string.IsNullOrWhiteSpace(environmentState.currentObjective)
-                ? "×ÔÓÉÌ½Ë÷"
+                ? "è‡ªç”±æ¢ç´¢"
                 : TrimStatusText(environmentState.currentObjective, 24);
 
             statusText.text =
-                $"½ÇÉ« <color=#8E6B3F>{compactRoleName}</color>  <color=#000000>Lv.{state.attributes.level}</color>  ÉúÃü <color=#FF5555>{state.attributes.currentHealth}/{derived.maxHealthTotal}</color>  ÁéÁ¦ <color=#55AAFF>{state.attributes.currentMana}/{derived.maxManaTotal}</color>\n" +
-                $"Á¦ <color=#B5651D>{derived.strengthTotal}</color>  Ãô <color=#6C8B3C>{derived.agilityTotal}</color>  ÖÇ <color=#5D7FB8>{derived.intelligenceTotal}</color>  ¹¥ <color=#6F3D1F>{derived.attackPower}</color>  Îä <color=#7A5F2A>{compactWeaponName}</color>\n" +
-                $"µØ <color=#FFAA00>{compactLocation}</color>  Ìì <color=#9EC8FF>{GetDisplayWeatherText(environmentState.weather)}</color>  Ê± <color=#B6E0FE>{GetDisplayTimeText(environmentState.timeOfDay)}</color>  Ä¿±ê <color=#D9B16A>{compactObjectiveText}</color>\n" +
-                $"±êÇ© <color=#8E6B3F>{compactTagPreview}</color>";
+                $"è§’è‰² <color=#8E6B3F>{compactRoleName}</color>  <color=#000000>Lv.{state.attributes.level}</color>  ç”Ÿå‘½ <color=#FF5555>{state.attributes.currentHealth}/{derived.maxHealthTotal}</color>  çµåŠ› <color=#55AAFF>{state.attributes.currentMana}/{derived.maxManaTotal}</color>\n" +
+                $"åŠ› <color=#B5651D>{derived.strengthTotal}</color>  æ• <color=#6C8B3C>{derived.agilityTotal}</color>  æ™º <color=#5D7FB8>{derived.intelligenceTotal}</color>  æ”» <color=#6F3D1F>{derived.attackPower}</color>  æ­¦ <color=#7A5F2A>{compactWeaponName}</color>\n" +
+                $"åœ° <color=#FFAA00>{compactLocation}</color>  å¤© <color=#9EC8FF>{GetDisplayWeatherText(environmentState.weather)}</color>  æ—¶ <color=#B6E0FE>{GetDisplayTimeText(environmentState.timeOfDay)}</color>  ç›®æ ‡ <color=#D9B16A>{compactObjectiveText}</color>\n" +
+                $"æ ‡ç­¾ <color=#8E6B3F>{compactTagPreview}</color>";
             return;
         }
 
         if (Application.isPlaying)
         {
-            string compactWeaponName = equippedWeapon?.runtimeData?.name ?? "¿ÕÊÖ";
+            string compactWeaponName = equippedWeapon?.runtimeData?.name ?? "ç©ºæ‰‹";
             string compactTagPreview = environmentState.dynamicTags != null && environmentState.dynamicTags.Count > 0
                 ? string.Join(" / ", environmentState.dynamicTags.Take(4))
-                : "ÔİÎŞ";
+                : "æš‚æ— ";
             string compactObjectiveText = string.IsNullOrWhiteSpace(environmentState.currentObjective)
-                ? "×ÔÓÉÌ½Ë÷"
+                ? "è‡ªç”±æ¢ç´¢"
                 : environmentState.currentObjective;
 
             statusText.text =
-                $"½ÇÉ«: <color=#8E6B3F>{state.identity?.name ?? "ÎŞÃûÂÃÈË"}</color>  Lv.{state.attributes.level}\n" +
-                $"ÉúÃü: <color=#FF5555>{state.attributes.currentHealth}/{derived.maxHealthTotal}</color>\n" +
-                $"ÁéÁ¦: <color=#55AAFF>{state.attributes.currentMana}/{derived.maxManaTotal}</color>\n" +
-                $"Á¦Á¿: <color=#B5651D>{derived.strengthTotal}</color>  " +
-                $"Ãô½İ: <color=#6C8B3C>{derived.agilityTotal}</color>  " +
-                $"ÖÇÁ¦: <color=#5D7FB8>{derived.intelligenceTotal}</color>\n" +
-                $"¹¥»÷: <color=#6F3D1F>{derived.attackPower}</color>  ÎäÆ÷: <color=#7A5F2A>{compactWeaponName}</color>\n" +
-                $"µØµã: <color=#FFAA00>{environmentState.locationName}</color>  ÌìÆø: <color=#9EC8FF>{GetDisplayWeatherText(environmentState.weather)}</color>  " +
-                $"Ê±¾°: <color=#B6E0FE>{GetDisplayTimeText(environmentState.timeOfDay)}</color>\n" +
-                $"Ä¿±ê: <color=#D9B16A>{compactObjectiveText}</color>\n" +
-                $"±êÇ©: <color=#8E6B3F>{compactTagPreview}</color>";
+                $"è§’è‰²: <color=#8E6B3F>{state.identity?.name ?? "æ— åæ—…äºº"}</color>  Lv.{state.attributes.level}\n" +
+                $"ç”Ÿå‘½: <color=#FF5555>{state.attributes.currentHealth}/{derived.maxHealthTotal}</color>\n" +
+                $"çµåŠ›: <color=#55AAFF>{state.attributes.currentMana}/{derived.maxManaTotal}</color>\n" +
+                $"åŠ›é‡: <color=#B5651D>{derived.strengthTotal}</color>  " +
+                $"æ•æ·: <color=#6C8B3C>{derived.agilityTotal}</color>  " +
+                $"æ™ºåŠ›: <color=#5D7FB8>{derived.intelligenceTotal}</color>\n" +
+                $"æ”»å‡»: <color=#6F3D1F>{derived.attackPower}</color>  æ­¦å™¨: <color=#7A5F2A>{compactWeaponName}</color>\n" +
+                $"åœ°ç‚¹: <color=#FFAA00>{environmentState.locationName}</color>  å¤©æ°”: <color=#9EC8FF>{GetDisplayWeatherText(environmentState.weather)}</color>  " +
+                $"æ—¶æ™¯: <color=#B6E0FE>{GetDisplayTimeText(environmentState.timeOfDay)}</color>\n" +
+                $"ç›®æ ‡: <color=#D9B16A>{compactObjectiveText}</color>\n" +
+                $"æ ‡ç­¾: <color=#8E6B3F>{compactTagPreview}</color>";
             return;
         }
-        string weaponName = equippedWeapon?.runtimeData?.name ?? "¿ÕÊÖ";
+        string weaponName = equippedWeapon?.runtimeData?.name ?? "ç©ºæ‰‹";
 
         string tagPreview = environmentState.dynamicTags != null && environmentState.dynamicTags.Count > 0
             ? string.Join(" / ", environmentState.dynamicTags.Take(4))
-            : "ÔİÎŞ";
+            : "æš‚æ— ";
         string objectiveText = string.IsNullOrWhiteSpace(environmentState.currentObjective)
-            ? "×ÔÓÉÌ½Ë÷"
+            ? "è‡ªç”±æ¢ç´¢"
             : environmentState.currentObjective;
 
         statusText.text =
-            $"½ÇÉ«: <color=#8E6B3F>{state.identity?.name ?? "ÎŞÃûÂÃÈË"}</color>  Lv.{state.attributes.level}\n" +
-            $"ÉúÃü: <color=#FF5555>{state.attributes.currentHealth}/{derived.maxHealthTotal}</color>  (»ù´¡ {derived.maxHealthBase} + ×°±¸ {derived.maxHealthBonus:+#;-#;0})\n" +
-            $"ÁéÁ¦: <color=#55AAFF>{state.attributes.currentMana}/{derived.maxManaTotal}</color>  (»ù´¡ {derived.maxManaBase} + ×°±¸ {derived.maxManaBonus:+#;-#;0})\n" +
-            $"Á¦Á¿: <color=#B5651D>{derived.strengthBase}+{derived.strengthBonus}={derived.strengthTotal}</color>  " +
-            $"Ãô½İ: <color=#6C8B3C>{derived.agilityBase}+{derived.agilityBonus}={derived.agilityTotal}</color>  " +
-            $"ÖÇÁ¦: <color=#5D7FB8>{derived.intelligenceBase}+{derived.intelligenceBonus}={derived.intelligenceTotal}</color>\n" +
-            $"¹¥»÷: <color=#6F3D1F>{derived.attackPower}</color>  ÎäÆ÷: <color=#7A5F2A>{weaponName}</color>\n" +
-            $"µØµã: <color=#FFAA00>{environmentState.locationName}</color>  ÌìÆø: <color=#9EC8FF>{GetDisplayWeatherText(environmentState.weather)}</color>  " +
-            $"Ê±¾°: <color=#B6E0FE>{GetDisplayTimeText(environmentState.timeOfDay)}</color>\n" +
-            $"Ä¿±ê: <color=#D9B16A>{objectiveText}</color>\n" +
-            $"±êÇ©: <color=#8E6B3F>{tagPreview}</color>";
+            $"è§’è‰²: <color=#8E6B3F>{state.identity?.name ?? "æ— åæ—…äºº"}</color>  Lv.{state.attributes.level}\n" +
+            $"ç”Ÿå‘½: <color=#FF5555>{state.attributes.currentHealth}/{derived.maxHealthTotal}</color>  (åŸºç¡€ {derived.maxHealthBase} + è£…å¤‡ {derived.maxHealthBonus:+#;-#;0})\n" +
+            $"çµåŠ›: <color=#55AAFF>{state.attributes.currentMana}/{derived.maxManaTotal}</color>  (åŸºç¡€ {derived.maxManaBase} + è£…å¤‡ {derived.maxManaBonus:+#;-#;0})\n" +
+            $"åŠ›é‡: <color=#B5651D>{derived.strengthBase}+{derived.strengthBonus}={derived.strengthTotal}</color>  " +
+            $"æ•æ·: <color=#6C8B3C>{derived.agilityBase}+{derived.agilityBonus}={derived.agilityTotal}</color>  " +
+            $"æ™ºåŠ›: <color=#5D7FB8>{derived.intelligenceBase}+{derived.intelligenceBonus}={derived.intelligenceTotal}</color>\n" +
+            $"æ”»å‡»: <color=#6F3D1F>{derived.attackPower}</color>  æ­¦å™¨: <color=#7A5F2A>{weaponName}</color>\n" +
+            $"åœ°ç‚¹: <color=#FFAA00>{environmentState.locationName}</color>  å¤©æ°”: <color=#9EC8FF>{GetDisplayWeatherText(environmentState.weather)}</color>  " +
+            $"æ—¶æ™¯: <color=#B6E0FE>{GetDisplayTimeText(environmentState.timeOfDay)}</color>\n" +
+            $"ç›®æ ‡: <color=#D9B16A>{objectiveText}</color>\n" +
+            $"æ ‡ç­¾: <color=#8E6B3F>{tagPreview}</color>";
     }
 
     public void ShowLoading(bool isLoading)
@@ -298,7 +305,7 @@ public class MainGamePanel : BasePanel
 
         if (snapshot?.longTermMemories != null && snapshot.longTermMemories.Count > 0)
         {
-            builder.AppendLine("<color=#B79253>¡¾ÒÑ»Ö¸´¼ÇÒäÕªÒª¡¿</color>");
+            builder.AppendLine("<color=#B79253>ã€å·²æ¢å¤è®°å¿†æ‘˜è¦ã€‘</color>");
             foreach (var memory in snapshot.longTermMemories)
                 builder.AppendLine($"<color=#7A5F2A>{memory.summary}</color>");
             builder.AppendLine();
@@ -331,16 +338,16 @@ public class MainGamePanel : BasePanel
 
     public void ApplyBranding()
     {
-        SetButtonLabel(historyButton, "¼ÇÂ¼");
-        SetButtonLabel(hintButton, "ÍÆ¼ö");
-        SetButtonLabel(knowledgeGraphButton, "ÖªÊ¶Í¼Æ×");
-        SetButtonLabel(buttonSet, "ÉèÖÃ");
-        SetButtonLabel(sendButton, "ËÍ³öĞĞ¶¯");
-        SetButtonLabel(characterButton, "ÈËÎï");
-        SetButtonLabel(bagButton, "±³°ü");
+        SetButtonLabel(historyButton, "è®°å½•");
+        SetButtonLabel(hintButton, "æ¨è");
+        SetButtonLabel(knowledgeGraphButton, "çŸ¥è¯†å›¾è°±");
+        SetButtonLabel(buttonSet, "è®¾ç½®");
+        SetButtonLabel(sendButton, "é€å‡ºè¡ŒåŠ¨");
+        SetButtonLabel(characterButton, "äººç‰©");
+        SetButtonLabel(bagButton, "èƒŒåŒ…");
 
         if (inputField != null && inputField.placeholder is TMP_Text placeholder)
-            placeholder.text = "ÊäÈëĞĞ¶¯£¬ÀıÈç£º¹Û²ìÕĞÒ¡É½ÎíÖĞµÄ²İÄ¾";
+            placeholder.text = "è¾“å…¥è¡ŒåŠ¨ï¼Œä¾‹å¦‚ï¼šè§‚å¯Ÿæ‹›æ‘‡å±±é›¾ä¸­çš„è‰æœ¨";
     }
 
     private void OnHistoryClick()
@@ -478,7 +485,7 @@ public class MainGamePanel : BasePanel
 
         TMP_FontAsset fallbackFont = storyText != null ? storyText.font : statusText != null ? statusText.font : null;
 
-        // ²»ÔÙÔÚÔËĞĞÊ±Ç¿ÖÆÉèÖÃ×ÖºÅ/×Ô¶¯Ëõ·Å£»½ö±£ÁôºÚÉ«Óë»ù´¡½»»¥ÊôĞÔ¡£
+        // ä¸å†åœ¨è¿è¡Œæ—¶å¼ºåˆ¶è®¾ç½®å­—å·/è‡ªåŠ¨ç¼©æ”¾ï¼›ä»…ä¿ç•™é»‘è‰²ä¸åŸºç¡€äº¤äº’å±æ€§ã€‚
         ApplyTooltipTextNonSizingPresentation(itemTooltipNameText, fallbackFont);
         ApplyTooltipTextNonSizingPresentation(itemTooltipDetailText, fallbackFont);
         ApplyTooltipTextNonSizingPresentation(itemTooltipText, fallbackFont);
@@ -489,7 +496,7 @@ public class MainGamePanel : BasePanel
         if (text == null)
             return;
 
-        text.color = Color.black; // ±£Áô£ºÎÄ×ÖÎªºÚÉ«
+        text.color = Color.black; // ä¿ç•™ï¼šæ–‡å­—ä¸ºé»‘è‰²
         text.raycastTarget = false;
         text.richText = false;
 
@@ -640,6 +647,52 @@ public class MainGamePanel : BasePanel
     private void UnregisterCenterToastListener()
     {
         EventCenter.Instance.RemoveListener<string>(CenterToastEventName, HandleCenterToastRequested);
+    }
+
+    private void EnsureScreenFlashFeedback()
+    {
+        if (screenFlashFeedback != null)
+            return;
+
+        screenFlashFeedback = GetComponent<ScreenFlashFeedback>();
+        if (screenFlashFeedback == null)
+            screenFlashFeedback = gameObject.AddComponent<ScreenFlashFeedback>();
+    }
+
+    private void HandleHealthFlash(RoleState state)
+    {
+        if (state == null)
+        {
+            ResetHealthFlashBaseline(null);
+            return;
+        }
+
+        int currentHealth = state.attributes.currentHealth;
+        if (healthFlashState != state || !hasHealthFlashBaseline)
+        {
+            ResetHealthFlashBaseline(state);
+            return;
+        }
+
+        if (currentHealth < lastHealthForFlash)
+        {
+            EnsureScreenFlashFeedback();
+            screenFlashFeedback?.PlayDamageFlash();
+        }
+        else if (currentHealth > lastHealthForFlash)
+        {
+            EnsureScreenFlashFeedback();
+            screenFlashFeedback?.PlayHealFlash();
+        }
+
+        lastHealthForFlash = currentHealth;
+    }
+
+    private void ResetHealthFlashBaseline(RoleState state)
+    {
+        healthFlashState = state;
+        hasHealthFlashBaseline = state != null;
+        lastHealthForFlash = state != null ? state.attributes.currentHealth : 0;
     }
 
     private void HandleCenterToastRequested(string message)
@@ -813,13 +866,13 @@ public class MainGamePanel : BasePanel
         {
             changed = InventoryStateUtility.TryUnequipSlot(boundState, itemView.EquipSlotType, boundItemLibrary, out message);
             if (changed)
-                message = $"{itemView.DisplayName} ÒÑĞ¶ÏÂ¡£";
+                message = $"{itemView.DisplayName} å·²å¸ä¸‹ã€‚";
         }
         else if (itemView.Template != null && itemView.Template.IsEquipment)
         {
             changed = InventoryStateUtility.TryEquipInventoryItem(boundState, itemView.InventoryIndex, boundItemLibrary, out message);
             if (changed)
-                message = $"{itemView.DisplayName} ÒÑ×°±¸¡£";
+                message = $"{itemView.DisplayName} å·²è£…å¤‡ã€‚";
         }
 
         else
@@ -828,7 +881,7 @@ public class MainGamePanel : BasePanel
         }
 
         if (!string.IsNullOrWhiteSpace(message))
-            AppendText($"<color=#C58F2B>¡¾ÏµÍ³¡¿{message}</color>", false);
+            AppendText($"<color=#C58F2B>ã€ç³»ç»Ÿã€‘{message}</color>", false);
 
         if (!changed)
             return;
@@ -842,7 +895,7 @@ public class MainGamePanel : BasePanel
         message = null;
         if (boundState == null || itemView?.Entry == null)
         {
-            message = "Ä¿±êÎïÆ·²»´æÔÚ¡£";
+            message = "ç›®æ ‡ç‰©å“ä¸å­˜åœ¨ã€‚";
             return false;
         }
 
@@ -855,31 +908,31 @@ public class MainGamePanel : BasePanel
         string displayName = entry.runtimeData?.name ?? template?.displayName ?? entry.templateId;
         if (string.IsNullOrWhiteSpace(displayName))
         {
-            message = "¸ÃÎïÆ·ĞÅÏ¢²»ÍêÕû£¬ÔİÊ±ÎŞ·¨Ê¹ÓÃ¡£";
+            message = "è¯¥ç‰©å“ä¿¡æ¯ä¸å®Œæ•´ï¼Œæš‚æ—¶æ— æ³•ä½¿ç”¨ã€‚";
             return false;
         }
 
-        if (ContainsItemKeyword(displayName, "ÖÎÁÆÒ©Ë®"))
+        if (ContainsItemKeyword(displayName, "æ²»ç–—è¯æ°´"))
         {
             if (!TryConsumeExactInventoryEntry(entry))
             {
-                message = "ÖÎÁÆÒ©Ë®²»´æÔÚ»òÒÑ±»Ê¹ÓÃ¡£";
+                message = "æ²»ç–—è¯æ°´ä¸å­˜åœ¨æˆ–å·²è¢«ä½¿ç”¨ã€‚";
                 return false;
             }
 
             int restoredHealth = Mathf.Min(18, InventoryStateUtility.CalculateDerivedAttributes(boundState).maxHealthTotal - boundState.attributes.currentHealth);
             boundState.attributes.currentHealth += restoredHealth;
-            boundEnvironment.AddTag("Ò©Æø»ØÅ¯");
+            boundEnvironment.AddTag("è¯æ°”å›æš–");
             InventoryStateUtility.NormalizeResourceCaps(boundState, InventoryStateUtility.CalculateDerivedAttributes(boundState));
-            message = $"·şÏÂÖÎÁÆÒ©Ë®£¬ÉúÃü»Ö¸´ +{restoredHealth}";
+            message = $"æœä¸‹æ²»ç–—è¯æ°´ï¼Œç”Ÿå‘½æ¢å¤ +{restoredHealth}";
             return true;
         }
 
-        if (ContainsItemKeyword(displayName, "×£Óà"))
+        if (ContainsItemKeyword(displayName, "ç¥ä½™"))
         {
             if (!TryConsumeExactInventoryEntry(entry))
             {
-                message = "×£Óà²»´æÔÚ»òÒÑ±»Ê¹ÓÃ¡£";
+                message = "ç¥ä½™ä¸å­˜åœ¨æˆ–å·²è¢«ä½¿ç”¨ã€‚";
                 return false;
             }
 
@@ -888,31 +941,31 @@ public class MainGamePanel : BasePanel
             int restoredMana = Mathf.Min(6, derived.maxManaTotal - boundState.attributes.currentMana);
             boundState.attributes.currentHealth += restoredHealth;
             boundState.attributes.currentMana += restoredMana;
-            boundEnvironment.AddTag("Ê³²İ»Ø¸Ê");
-            boundEnvironment.currentObjective = "ÌåÁ¦ÉÔ¶¨£¬¿ÉÒÔ¼ÌĞø¹Û²ì»òÉîÈëÃÔÎí¡£";
+            boundEnvironment.AddTag("é£Ÿè‰å›ç”˜");
+            boundEnvironment.currentObjective = "ä½“åŠ›ç¨å®šï¼Œå¯ä»¥ç»§ç»­è§‚å¯Ÿæˆ–æ·±å…¥è¿·é›¾ã€‚";
             InventoryStateUtility.NormalizeResourceCaps(boundState, InventoryStateUtility.CalculateDerivedAttributes(boundState));
-            message = $"ÑÊÏÂ×£ÓàºóÆøÏ¢ÉÔ¶¨£¬ÉúÃü +{restoredHealth}£¬ÁéÁ¦ +{restoredMana}";
+            message = $"å’½ä¸‹ç¥ä½™åæ°”æ¯ç¨å®šï¼Œç”Ÿå‘½ +{restoredHealth}ï¼ŒçµåŠ› +{restoredMana}";
             return true;
         }
 
-        if (ContainsItemKeyword(displayName, "ÃÔ¹È"))
+        if (ContainsItemKeyword(displayName, "è¿·è°·"))
         {
-            boundEnvironment.RemoveTag("ÃÔÊ§·½Ïò");
-            boundEnvironment.AddTag("ÃÔ¹ÈÖ¸Â·");
-            boundEnvironment.currentObjective = "ÑØÎí¾¶ÉîÈë£¬¹Û²ìÇà°×Òì¹âµÄÀ´Ô´¡£";
-            message = "ÅåÉÏÃÔ¹Èºó£¬ÎíÖĞµÄÂ·¾¶ÂÖÀªÖğ½¥ÇåÎú¡£";
+            boundEnvironment.RemoveTag("è¿·å¤±æ–¹å‘");
+            boundEnvironment.AddTag("è¿·è°·æŒ‡è·¯");
+            boundEnvironment.currentObjective = "æ²¿é›¾å¾„æ·±å…¥ï¼Œè§‚å¯Ÿé’ç™½å¼‚å…‰çš„æ¥æºã€‚";
+            message = "ä½©ä¸Šè¿·è°·åï¼Œé›¾ä¸­çš„è·¯å¾„è½®å»“é€æ¸æ¸…æ™°ã€‚";
             return true;
         }
 
         if (template == null || template.itemKind != ItemKind.Consumable)
         {
-            message = "¸ÃÎïÆ·µ±Ç°ÎŞ·¨Ö±½ÓÊ¹ÓÃ¡£";
+            message = "è¯¥ç‰©å“å½“å‰æ— æ³•ç›´æ¥ä½¿ç”¨ã€‚";
             return false;
         }
 
         if (!TryConsumeExactInventoryEntry(entry))
         {
-            message = "¸ÃÎïÆ·²»´æÔÚ»òÒÑ±»Ê¹ÓÃ¡£";
+            message = "è¯¥ç‰©å“ä¸å­˜åœ¨æˆ–å·²è¢«ä½¿ç”¨ã€‚";
             return false;
         }
 
@@ -939,17 +992,17 @@ public class MainGamePanel : BasePanel
         boundState.attributes.currentHealth += genericHealth;
         boundState.attributes.currentMana += genericMana;
         InventoryStateUtility.NormalizeResourceCaps(boundState, InventoryStateUtility.CalculateDerivedAttributes(boundState));
-        boundEnvironment.AddTag("ÎïÆ·ÒÑÊ¹ÓÃ");
+        boundEnvironment.AddTag("ç‰©å“å·²ä½¿ç”¨");
 
         if (genericHealth > 0 || genericMana > 0)
         {
-            message = $"{displayName} ÒÑÊ¹ÓÃ£¬ÉúÃü +{genericHealth}£¬ÁéÁ¦ +{genericMana}";
+            message = $"{displayName} å·²ä½¿ç”¨ï¼Œç”Ÿå‘½ +{genericHealth}ï¼ŒçµåŠ› +{genericMana}";
         }
         else
         {
             message = string.IsNullOrWhiteSpace(entry.runtimeData?.effectText)
-                ? displayName + " ÒÑÊ¹ÓÃ¡£"
-                : displayName + " ÒÑÊ¹ÓÃ£º" + entry.runtimeData.effectText;
+                ? displayName + " å·²ä½¿ç”¨ã€‚"
+                : displayName + " å·²ä½¿ç”¨ï¼š" + entry.runtimeData.effectText;
         }
 
         return true;
@@ -1156,18 +1209,18 @@ public class MainGamePanel : BasePanel
         if (entry == null)
             return string.Empty;
 
-        string rarity = string.IsNullOrWhiteSpace(entry.runtimeData?.rarity) ? "ÆÕÍ¨" : entry.runtimeData.rarity;
+        string rarity = string.IsNullOrWhiteSpace(entry.runtimeData?.rarity) ? "æ™®é€š" : entry.runtimeData.rarity;
         string description = string.IsNullOrWhiteSpace(entry.runtimeData?.description)
-            ? template?.templateDescription ?? "ÎŞÃèÊö"
+            ? template?.templateDescription ?? "æ— æè¿°"
             : entry.runtimeData.description;
 
-        return $"Ï¡ÓĞ¶È: {rarity}\nËµÃ÷: {description}";
+        return $"ç¨€æœ‰åº¦: {rarity}\nè¯´æ˜: {description}";
     }
 
     private static string TrimStatusText(string rawText, int maxLength)
     {
         if (string.IsNullOrWhiteSpace(rawText))
-            return "ÔİÎŞ";
+            return "æš‚æ— ";
 
         string trimmed = rawText.Trim();
         if (maxLength <= 3 || trimmed.Length <= maxLength)
@@ -1181,12 +1234,12 @@ public class MainGamePanel : BasePanel
         if (entry == null)
             return string.Empty;
 
-        string rarity = string.IsNullOrWhiteSpace(entry.runtimeData?.rarity) ? "ÆÕÍ¨" : entry.runtimeData.rarity;
+        string rarity = string.IsNullOrWhiteSpace(entry.runtimeData?.rarity) ? "æ™®é€š" : entry.runtimeData.rarity;
         string description = string.IsNullOrWhiteSpace(entry.runtimeData?.description)
-            ? template?.templateDescription ?? "ÎŞÃèÊö"
+            ? template?.templateDescription ?? "æ— æè¿°"
             : entry.runtimeData.description;
 
-        return $"Ï¡ÓĞ¶È: {rarity}\nËµÃ÷: {description}";
+        return $"ç¨€æœ‰åº¦: {rarity}\nè¯´æ˜: {description}";
     }
 
     private string BuildTooltipText(ItemInventoryEntry entry, ItemTemplateData template, bool isEquipped, EquipSlotType slotType)
@@ -1196,27 +1249,27 @@ public class MainGamePanel : BasePanel
 
         string slotText = template != null && template.IsEquipment
             ? template.equipSlot.ToString()
-            : (isEquipped ? slotType.ToString() : "±³°üÎïÆ·");
-        string countText = entry.count > 1 ? $"ÊıÁ¿: {entry.count}\n" : string.Empty;
-        string rarity = string.IsNullOrWhiteSpace(entry.runtimeData?.rarity) ? "ÆÕÍ¨" : entry.runtimeData.rarity;
+            : (isEquipped ? slotType.ToString() : "èƒŒåŒ…ç‰©å“");
+        string countText = entry.count > 1 ? $"æ•°é‡: {entry.count}\n" : string.Empty;
+        string rarity = string.IsNullOrWhiteSpace(entry.runtimeData?.rarity) ? "æ™®é€š" : entry.runtimeData.rarity;
         string description = string.IsNullOrWhiteSpace(entry.runtimeData?.description)
-            ? template?.templateDescription ?? "ÎŞÃèÊö"
+            ? template?.templateDescription ?? "æ— æè¿°"
             : entry.runtimeData.description;
-        string effect = string.IsNullOrWhiteSpace(entry.runtimeData?.effectText) ? "ÎŞ" : entry.runtimeData.effectText;
+        string effect = string.IsNullOrWhiteSpace(entry.runtimeData?.effectText) ? "æ— " : entry.runtimeData.effectText;
         string modifiers = entry.runtimeData?.statModifiers != null && entry.runtimeData.statModifiers.Count > 0
             ? InventoryStateUtility.BuildModifierText(entry.runtimeData.statModifiers)
             : "none";
 
         return
             $"{entry.runtimeData?.name ?? template?.displayName ?? entry.templateId}\n" +
-            $"Ä£°å: {entry.templateId}\n" +
-            $"·ÖÀà: {template?.itemKind.ToString() ?? "Unknown"}\n" +
-            $"²ÛÎ»: {slotText}\n" +
-            $"Ï¡ÓĞ¶È: {rarity}\n" +
+            $"æ¨¡æ¿: {entry.templateId}\n" +
+            $"åˆ†ç±»: {template?.itemKind.ToString() ?? "Unknown"}\n" +
+            $"æ§½ä½: {slotText}\n" +
+            $"ç¨€æœ‰åº¦: {rarity}\n" +
             countText +
-            $"ËµÃ÷: {description}\n" +
-            $"Ğ§¹û: {effect}\n" +
-            $"´ÊÌõ: {modifiers}";
+            $"è¯´æ˜: {description}\n" +
+            $"æ•ˆæœ: {effect}\n" +
+            $"è¯æ¡: {modifiers}";
     }
 
     private static TMP_Text FindTooltipText(IEnumerable<TMP_Text> texts, params string[] keywords)
@@ -1291,11 +1344,11 @@ public class MainGamePanel : BasePanel
     {
         return rawTime switch
         {
-            "Dawn" => "Çå³¿",
-            "Day" => "°×Öç",
-            "Dusk" => "°øÍí",
-            "Night" => "Ò¹Íí",
-            _ => string.IsNullOrWhiteSpace(rawTime) ? "Î´Öª" : rawTime
+            "Dawn" => "æ¸…æ™¨",
+            "Day" => "ç™½æ˜¼",
+            "Dusk" => "å‚æ™š",
+            "Night" => "å¤œæ™š",
+            _ => string.IsNullOrWhiteSpace(rawTime) ? "æœªçŸ¥" : rawTime
         };
     }
 
@@ -1303,11 +1356,11 @@ public class MainGamePanel : BasePanel
     {
         return rawWeather switch
         {
-            "Clear" => "ÇçÀÊ",
-            "Foggy" => "ÃÔÎí",
-            "Rainy" => "ÓêÄ»",
-            "Stormy" => "¿ñ·ç",
-            _ => string.IsNullOrWhiteSpace(rawWeather) ? "Î´Öª" : rawWeather
+            "Clear" => "æ™´æœ—",
+            "Foggy" => "è¿·é›¾",
+            "Rainy" => "é›¨å¹•",
+            "Stormy" => "ç‹‚é£",
+            _ => string.IsNullOrWhiteSpace(rawWeather) ? "æœªçŸ¥" : rawWeather
         };
     }
 
