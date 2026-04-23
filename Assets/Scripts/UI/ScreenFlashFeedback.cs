@@ -1,11 +1,16 @@
 using System.Collections;
+using System.Collections.Generic;
+using System.IO;
 using UnityEngine;
+using UnityEngine.Networking;
 using UnityEngine.UI;
 
 [DisallowMultipleComponent]
 public class ScreenFlashFeedback : MonoBehaviour
 {
     private const string FlashShaderName = "UI/Health Flash";
+    private const string DefaultDamageSfxPath = "Assets/ArtRes/Music/wound.wav";
+    private const string DefaultHealSfxPath = "Assets/ArtRes/Music/health.wav";
 
     private static readonly int TintColorId = Shader.PropertyToID("_TintColor");
     private static readonly int ModeId = Shader.PropertyToID("_Mode");
@@ -22,13 +27,13 @@ public class ScreenFlashFeedback : MonoBehaviour
     [SerializeField] private Color damageColor = new Color(1f, 0.08f, 0.04f, 0.42f);
     [SerializeField] private float damageDuration = 0.42f;
     [SerializeField] private float damageIntensity = 0.82f;
-    [SerializeField] private string damageSfxPath;
+    [SerializeField] private string damageSfxPath = DefaultDamageSfxPath;
 
     [Header("Heal Flash")]
     [SerializeField] private Color healColor = new Color(0.14f, 1f, 0.36f, 0.36f);
     [SerializeField] private float healDuration = 0.58f;
     [SerializeField] private float healIntensity = 0.72f;
-    [SerializeField] private string healSfxPath;
+    [SerializeField] private string healSfxPath = DefaultHealSfxPath;
 
     [Header("Look")]
     [SerializeField] private float softness = 1.7f;
@@ -38,6 +43,8 @@ public class ScreenFlashFeedback : MonoBehaviour
     private Image overlayImage;
     private Material flashMaterial;
     private Coroutine flashCoroutine;
+    private AudioSource localSfxSource;
+    private readonly Dictionary<string, AudioClip> localClipCache = new Dictionary<string, AudioClip>();
 
     public void PlayDamageFlash()
     {
@@ -150,8 +157,89 @@ public class ScreenFlashFeedback : MonoBehaviour
 
     private void PlayFeedbackSound(string sfxPath)
     {
-        if (!string.IsNullOrWhiteSpace(sfxPath))
-            AudioMgr.Instance?.PlaySound(sfxPath);
+        if (string.IsNullOrWhiteSpace(sfxPath))
+            return;
+
+        if (TryResolveLocalAudioPath(sfxPath, out string localPath))
+        {
+            StartCoroutine(PlayLocalAudioClip(localPath));
+            return;
+        }
+
+        AudioMgr.Instance?.PlaySound(sfxPath);
+    }
+
+    private bool TryResolveLocalAudioPath(string sfxPath, out string localPath)
+    {
+        localPath = null;
+        string normalizedPath = sfxPath.Trim().Replace('\\', '/');
+        if (string.IsNullOrWhiteSpace(normalizedPath))
+            return false;
+
+        string projectRoot = Directory.GetParent(Application.dataPath)?.FullName;
+        string candidate = Path.IsPathRooted(normalizedPath)
+            ? normalizedPath
+            : normalizedPath.StartsWith("Assets/")
+                ? Path.Combine(projectRoot ?? string.Empty, normalizedPath)
+                : Path.Combine(Application.dataPath, normalizedPath);
+
+        if (File.Exists(candidate))
+        {
+            localPath = candidate;
+            return true;
+        }
+
+        if (!Path.HasExtension(candidate))
+        {
+            string wavCandidate = candidate + ".wav";
+            if (File.Exists(wavCandidate))
+            {
+                localPath = wavCandidate;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private IEnumerator PlayLocalAudioClip(string localPath)
+    {
+        if (string.IsNullOrWhiteSpace(localPath))
+            yield break;
+
+        if (localClipCache.TryGetValue(localPath, out AudioClip cachedClip))
+        {
+            PlayLocalClip(cachedClip);
+            yield break;
+        }
+
+        using (UnityWebRequest request = UnityWebRequestMultimedia.GetAudioClip("file:///" + localPath.Replace('\\', '/'), AudioType.WAV))
+        {
+            yield return request.SendWebRequest();
+            if (request.result != UnityWebRequest.Result.Success)
+                yield break;
+
+            AudioClip clip = DownloadHandlerAudioClip.GetContent(request);
+            if (clip == null)
+                yield break;
+
+            localClipCache[localPath] = clip;
+            PlayLocalClip(clip);
+        }
+    }
+
+    private void PlayLocalClip(AudioClip clip)
+    {
+        if (clip == null)
+            return;
+
+        if (localSfxSource == null)
+        {
+            localSfxSource = gameObject.AddComponent<AudioSource>();
+            localSfxSource.playOnAwake = false;
+        }
+
+        localSfxSource.PlayOneShot(clip);
     }
 
     private void SetIntensity(float intensity)
@@ -162,6 +250,14 @@ public class ScreenFlashFeedback : MonoBehaviour
 
     private void OnDestroy()
     {
+        foreach (AudioClip clip in localClipCache.Values)
+        {
+            if (clip != null)
+                Destroy(clip);
+        }
+
+        localClipCache.Clear();
+
         if (flashMaterial == null)
             return;
 
